@@ -1,10 +1,15 @@
 import React from "react";
-import { getCurrentUser } from "@/lib/auth";
 import { getAllHouses } from "@/lib/actions/house.actions";
-import { getCashflowAnalytics } from "@/lib/actions/analytics.actions";
+import {
+  getCashflowAnalytics,
+  getHouseAnalyticsData,
+  getRentalIncomeAnalyticsData,
+} from "@/lib/actions/analytics.actions";
 import { KpiCard } from "@/components/dashboard/kpi-card";
 import { CashflowAnalyticsChart } from "@/components/analytics/cashflow-analytics-chart";
 import { CategoryBarChart } from "@/components/analytics/category-bar-chart";
+import { HouseAnalyticsSection } from "@/components/analytics/house-analytics-section";
+import { RentalIncomeSection } from "@/components/analytics/rental-income-section";
 import { formatINR } from "@/lib/formatters";
 import {
   AnalyticsDatePreset,
@@ -15,26 +20,38 @@ import {
 export default async function AnalyticsPage({
   searchParams,
 }: AnalyticsPageProps) {
-  const [user, resolvedParams, houses] = await Promise.all([
-    getCurrentUser(),
-    searchParams,
-    getAllHouses(),
-  ]);
-
+  const resolvedParams = await searchParams;
   const currentHouseId = resolvedParams.houseId || "ALL";
   const currentRange = (resolvedParams.range as AnalyticsDatePreset) || "1Y";
   const currentStartDate = resolvedParams.startDate;
   const currentEndDate = resolvedParams.endDate;
   const currentMode =
     (resolvedParams.mode as AnalyticsViewMode) || "cumulative";
+  const currentRunningYear = new Date().getFullYear();
+  const rentalYear = resolvedParams.rentalYear
+    ? parseInt(resolvedParams.rentalYear, 10)
+    : currentRunningYear;
+  const rentalView =
+    resolvedParams.rentalView === "grid"
+      ? "MATRIX"
+      : resolvedParams.rentalView === "table"
+        ? "TABLE"
+        : "TIMELINE";
 
-  const analyticsData = await getCashflowAnalytics({
-    houseId: currentHouseId,
-    range: currentRange,
-    startDate: currentStartDate,
-    endDate: currentEndDate,
-    mode: currentMode,
-  });
+  // Run all independent queries in parallel
+  const [houses, houseAnalytics, analyticsData, rentalAnalytics] =
+    await Promise.all([
+      getAllHouses(),
+      getHouseAnalyticsData(),
+      getCashflowAnalytics({
+        houseId: currentHouseId,
+        range: currentRange,
+        startDate: currentStartDate,
+        endDate: currentEndDate,
+        mode: currentMode,
+      }),
+      getRentalIncomeAnalyticsData(rentalYear),
+    ]);
 
   const { summary } = analyticsData;
   const totalFlow = summary.totalInflow + summary.totalOutflow;
@@ -132,6 +149,16 @@ export default async function AnalyticsPage({
         outflowCategories={analyticsData.categories.outflow}
         combinedCategories={analyticsData.categories.combined}
         defaultType="COMBINED"
+      />
+
+      {/* Multi-Property & House Financial Intelligence Dashboard */}
+      <HouseAnalyticsSection data={houseAnalytics} />
+
+      {/* Yearly Rental Income & Occupancy Matrix */}
+      <RentalIncomeSection
+        data={rentalAnalytics}
+        selectedYear={rentalYear}
+        initialViewMode={rentalView}
       />
     </div>
   );

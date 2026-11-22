@@ -8,7 +8,7 @@ import { RecentFeed } from "@/components/dashboard/recent-feed";
 import { Clock } from "lucide-react";
 import { formatINR, formatDate } from "@/lib/formatters";
 import Link from "next/link";
-import { DashboardPageProps } from "@/types/dashboard.types";
+import { DashboardPageProps, CashflowTimeframe } from "@/types/dashboard.types";
 
 export default async function DashboardPage({
   searchParams,
@@ -18,9 +18,11 @@ export default async function DashboardPage({
     searchParams,
   ]);
   const currentHouseId = resolvedParams.houseId || "ALL";
+  const currentTimeframe =
+    (resolvedParams.timeframe as CashflowTimeframe) || "1Y";
 
   const [summary, activeSessions] = await Promise.all([
-    getDashboardSummary(currentHouseId),
+    getDashboardSummary(currentHouseId, currentTimeframe),
     user ? getUserActiveSessions() : Promise.resolve([]),
   ]);
 
@@ -153,7 +155,11 @@ export default async function DashboardPage({
       {/* Row 2: Interactive Cashflow Timeline & Category Pill Breakdown */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2">
-          <CashflowChart data={timelineData} />
+          <CashflowChart
+            initialData={timelineData}
+            currentHouseId={currentHouseId}
+            initialTimeframe={currentTimeframe}
+          />
         </div>
 
         {/* Category Breakdown Panel */}

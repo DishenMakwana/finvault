@@ -13,5 +13,6 @@ Defines the global engineering workflow and execution boundaries for FinVault.
 ## Lifecycle Rules
 1. Every task must pass through `system/workflow.md`.
 2. Graph retrieval must precede context loading.
-3. Static validation (`npm run typecheck` / `bun run build`) must pass before code is accepted.
-4. Incremental memory updates must follow every completed task.
+3. Strict adherence to `instructions.md` (parallel queries, local caching, centralized types in `src/types/`, top-level imports only, Knip validation).
+4. Static validation (`npm run typecheck` / `bun run build`) must pass before code is accepted.
+5. Incremental memory updates must follow every completed task.

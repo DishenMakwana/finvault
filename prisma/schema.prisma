@@ -14,10 +14,11 @@ model User {
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
   
-  sessions     Session[]
-  houses       House[]
-  transactions Transaction[]
-  loans        Loan[]
+  sessions        Session[]
+  houses          House[]
+  transactions    Transaction[]
+  loans           Loan[]
+  rentalVacancies RentalVacancy[]
 
   @@map("users")
 }
@@ -142,4 +143,22 @@ model LoanRepayment {
   @@index([loanId, repaymentDate])
   @@index([houseId, repaymentDate])
   @@map("loan_repayments")
+}
+
+model RentalVacancy {
+  id        Int      @id @default(autoincrement())
+  userId    Int      @map("user_id")
+  unitName  String   @map("unit_name")
+  year      Int
+  month     Int
+  isVacant  Boolean  @default(true) @map("is_vacant")
+  notes     String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, unitName, year, month])
+  @@index([userId, year])
+  @@map("rental_vacancies")
 }

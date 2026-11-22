@@ -13,6 +13,10 @@ import {
 } from "@/helpers/search";
 import { MatchScoreResult, SearchableField } from "@/types/search.types";
 import { parseExcelDate, formatToDateStr } from "@/lib/formatters";
+import {
+  CashflowChartDataPoint,
+  CashflowTimeframe,
+} from "@/types/dashboard.types";
 
 function invalidateCashflowCaches() {
   cacheInvalidateTag("categories");
@@ -482,11 +486,166 @@ export async function updateTransactionAction(formData: FormData) {
   return { success: true };
 }
 
-export async function getDashboardSummary(selectedHouseId?: string | number) {
+export async function getCashflowTrendData(
+  timeframe: CashflowTimeframe = "1Y",
+  houseId?: string | number
+): Promise<CashflowChartDataPoint[]> {
+  const user = await getCurrentUser();
+  if (!user) return [];
+
+  const cacheKey = `cashflow_trend:${user.id}:${houseId || "all"}:${timeframe}`;
+  const cached = cacheGet<CashflowChartDataPoint[]>(cacheKey);
+  if (cached) return cached;
+
+  const txWhere: any = { deletedAt: null };
+  if (houseId && houseId !== "ALL") {
+    const hId = typeof houseId === "number" ? houseId : parseInt(houseId, 10);
+    if (!isNaN(hId)) {
+      txWhere.houseId = hId;
+    }
+  }
+
+  const now = new Date();
+  let endDate = new Date(
+    now.getFullYear(),
+    now.getMonth() + 1,
+    0,
+    23,
+    59,
+    59,
+    999
+  );
+  let startDate: Date;
+
+  if (timeframe === "1Y") {
+    startDate = new Date(now.getFullYear(), now.getMonth() - 11, 1);
+  } else if (timeframe === "2Y") {
+    startDate = new Date(now.getFullYear(), now.getMonth() - 23, 1);
+  } else if (timeframe === "3Y") {
+    startDate = new Date(now.getFullYear(), now.getMonth() - 35, 1);
+  } else {
+    // ALL: Find earliest transaction in the selected scope
+    const earliestTx = await prisma.transaction.findFirst({
+      where: txWhere,
+      orderBy: { dateOfAdd: "asc" },
+      select: { dateOfAdd: true },
+    });
+    if (earliestTx?.dateOfAdd) {
+      startDate = new Date(
+        earliestTx.dateOfAdd.getFullYear(),
+        earliestTx.dateOfAdd.getMonth(),
+        1
+      );
+    } else {
+      startDate = new Date(now.getFullYear(), now.getMonth() - 11, 1);
+    }
+  }
+
+  // Extend end date if there are future-dated transactions
+  const latestTx = await prisma.transaction.findFirst({
+    where: txWhere,
+    orderBy: { dateOfAdd: "desc" },
+    select: { dateOfAdd: true },
+  });
+  if (latestTx?.dateOfAdd && latestTx.dateOfAdd > endDate) {
+    endDate = new Date(
+      latestTx.dateOfAdd.getFullYear(),
+      latestTx.dateOfAdd.getMonth() + 1,
+      0,
+      23,
+      59,
+      59,
+      999
+    );
+  }
+
+  const totalMonths =
+    (endDate.getFullYear() - startDate.getFullYear()) * 12 +
+    (endDate.getMonth() - startDate.getMonth()) +
+    1;
+
+  const MONTH_SHORT = [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
+  ];
+
+  const months: { key: string; label: string }[] = [];
+  for (let i = 0; i < totalMonths; i++) {
+    const d = new Date(startDate.getFullYear(), startDate.getMonth() + i, 1);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const key = `${y}-${m}`;
+    const label = `${MONTH_SHORT[d.getMonth()]} '${String(y).slice(-2)}`;
+    months.push({ key, label });
+  }
+
+  const timelineMap: Record<
+    string,
+    { date: string; inflow: number; outflow: number; net: number }
+  > = {};
+
+  months.forEach(({ key, label }) => {
+    timelineMap[key] = { date: label, inflow: 0, outflow: 0, net: 0 };
+  });
+
+  const transactions = await prisma.transaction.findMany({
+    where: {
+      ...txWhere,
+      dateOfAdd: {
+        gte: startDate,
+        lte: endDate,
+      },
+    },
+    select: {
+      type: true,
+      amount: true,
+      dateOfAdd: true,
+    },
+    orderBy: { dateOfAdd: "asc" },
+  });
+
+  transactions.forEach((tx) => {
+    const d = new Date(tx.dateOfAdd);
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const key = `${y}-${m}`;
+    if (timelineMap[key]) {
+      const amt = Number(tx.amount);
+      if (tx.type === "INFLOW") {
+        timelineMap[key].inflow += amt;
+        timelineMap[key].net += amt;
+      } else {
+        timelineMap[key].outflow += amt;
+        timelineMap[key].net -= amt;
+      }
+    }
+  });
+
+  const result: CashflowChartDataPoint[] = months.map(
+    ({ key }) => timelineMap[key]
+  );
+  cacheSet(cacheKey, result, 60000, ["dashboard", "transactions"]);
+  return result;
+}
+
+export async function getDashboardSummary(
+  selectedHouseId?: string | number,
+  timeframe: CashflowTimeframe = "1Y"
+) {
   const user = await getCurrentUser();
   if (!user) return null;
 
-  const cacheKey = `dashboard:${user.id}:${selectedHouseId || "all"}`;
+  const cacheKey = `dashboard:${user.id}:${selectedHouseId || "all"}:${timeframe}`;
   const cached = cacheGet<any>(cacheKey);
   if (cached) return cached;
 
@@ -602,64 +761,8 @@ export async function getDashboardSummary(selectedHouseId?: string | number) {
     totalLoansDisbursed +
     totalLoansPaidBack;
 
-  // 5. Timeline for Recharts: at least 36 months (3 years) or all history ending at current month
-  const now = new Date();
-  let earliestDate = new Date(now.getFullYear(), now.getMonth() - 35, 1);
-  if (transactions.length > 0) {
-    const firstTxDate = new Date(transactions[0].dateOfAdd);
-    if (firstTxDate < earliestDate) {
-      earliestDate = new Date(
-        firstTxDate.getFullYear(),
-        firstTxDate.getMonth(),
-        1
-      );
-    }
-  }
-
-  const totalMonths = Math.max(
-    36,
-    (now.getFullYear() - earliestDate.getFullYear()) * 12 +
-      (now.getMonth() - earliestDate.getMonth()) +
-      1
-  );
-
-  const months: { key: string; label: string }[] = [];
-  for (let i = totalMonths - 1; i >= 0; i--) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, "0");
-    const key = `${y}-${m}`;
-    const label = `${m} ${y}`;
-    months.push({ key, label });
-  }
-
-  const timelineMap: Record<
-    string,
-    { date: string; inflow: number; outflow: number; net: number }
-  > = {};
-
-  months.forEach(({ key, label }) => {
-    timelineMap[key] = { date: label, inflow: 0, outflow: 0, net: 0 };
-  });
-
-  transactions.forEach((tx) => {
-    const d = new Date(tx.dateOfAdd);
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, "0");
-    const key = `${y}-${m}`;
-    if (timelineMap[key]) {
-      const amt = Number(tx.amount);
-      if (tx.type === "INFLOW") {
-        timelineMap[key].inflow += amt;
-        timelineMap[key].net += amt;
-      } else {
-        timelineMap[key].outflow += amt;
-        timelineMap[key].net -= amt;
-      }
-    }
-  });
-
-  const timelineData = months.map(({ key }) => timelineMap[key]);
+  // 5. Timeline for Recharts: dynamically fetched per timeframe
+  const timelineData = await getCashflowTrendData(timeframe, selectedHouseId);
 
   const result = {
     houses: houses.map((h) => ({

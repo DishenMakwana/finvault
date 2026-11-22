@@ -40,7 +40,7 @@ export interface QuickModalProps {
 
 export type CashflowTimeframe = "1Y" | "2Y" | "3Y" | "ALL";
 
-interface CashflowChartDataPoint {
+export interface CashflowChartDataPoint {
   date: string;
   inflow: number;
   outflow: number;
@@ -48,11 +48,14 @@ interface CashflowChartDataPoint {
 }
 
 export interface CashflowChartProps {
-  data: CashflowChartDataPoint[];
+  data?: CashflowChartDataPoint[];
+  initialData?: CashflowChartDataPoint[];
+  currentHouseId?: string | number;
+  initialTimeframe?: CashflowTimeframe;
 }
 
 export interface DashboardPageProps {
-  searchParams: Promise<{ houseId?: string }>;
+  searchParams: Promise<{ houseId?: string; timeframe?: string }>;
 }
 
 interface RecentFeedTransactionItem {

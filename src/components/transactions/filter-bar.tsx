@@ -17,7 +17,11 @@ import {
   Check,
   Flag,
 } from "lucide-react";
-import { FilterBarProps, DatePreset } from "@/types/transactions.types";
+import {
+  FilterBarProps,
+  DatePreset,
+  FilterActiveChip,
+} from "@/types/transactions.types";
 
 export function FilterBar({
   houses,
@@ -253,12 +257,7 @@ export function FilterBar({
   );
 
   // Determine active chips
-  const activeChips: {
-    id: string;
-    label: string;
-    icon: any;
-    onRemove: () => void;
-  }[] = [];
+  const activeChips: FilterActiveChip[] = [];
   if (selectedHouseObj && activeHouseId !== "ALL") {
     activeChips.push({
       id: "house",

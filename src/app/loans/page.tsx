@@ -1,5 +1,4 @@
 import React from "react";
-import { getCurrentUser } from "@/lib/auth";
 import { getLoans } from "@/lib/actions/loan.actions";
 import { getAllHouses } from "@/lib/actions/house.actions";
 import { LoanCard } from "@/components/loans/loan-card";
@@ -9,13 +8,13 @@ import { formatINR } from "@/lib/formatters";
 import { LoansPageProps } from "@/types/loans.types";
 
 export default async function LoansPage({ searchParams }: LoansPageProps) {
-  const [user, resolvedParams, houses] = await Promise.all([
-    getCurrentUser(),
-    searchParams,
-    getAllHouses(),
-  ]);
+  const resolvedParams = await searchParams;
   const houseId = resolvedParams.houseId;
-  const loans = await getLoans(houseId);
+
+  const [houses, loans] = await Promise.all([
+    getAllHouses(),
+    getLoans(houseId),
+  ]);
 
   // Summary Metrics
   const totalLent = loans.reduce((acc, l) => acc + Number(l.totalAmount), 0);

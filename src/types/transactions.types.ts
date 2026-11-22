@@ -109,3 +109,10 @@ export interface ExportTransactionItem {
   isFlagged?: boolean;
   createdAt: string | Date;
 }
+
+export interface FilterActiveChip {
+  id: string;
+  label: string;
+  icon?: any;
+  onRemove: () => void;
+}

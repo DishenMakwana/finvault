@@ -7,6 +7,8 @@ export type CategoryAnalysisType = "OUTFLOW" | "INFLOW" | "COMBINED";
 
 export type CategoryMetricDisplay = "amount" | "percentage";
 
+export type HouseMetricView = "CASH_IN_HAND" | "CASHFLOW" | "NET";
+
 export interface AnalyticsTransactionItem {
   id: number | string;
   type: "INFLOW" | "OUTFLOW";
@@ -95,6 +97,98 @@ export interface CategoryBarChartProps {
   defaultType?: CategoryAnalysisType;
 }
 
+export interface HouseAnalyticsItem {
+  id: number;
+  name: string;
+  initialCash: number;
+  totalInflow: number;
+  totalOutflow: number;
+  netCashFlow: number;
+  currentCashInHand: number;
+  inflowCount: number;
+  outflowCount: number;
+  inflowShare: number;
+  outflowShare: number;
+  totalFlowShare: number;
+  topInflowCategory?: { category: string; amount: number };
+  topOutflowCategory?: { category: string; amount: number };
+  outstandingLoans: number;
+  color: string;
+}
+
+export interface HouseAnalyticsSummary {
+  totalHouses: number;
+  totalPortfolioCash: number;
+  totalPortfolioInflow: number;
+  totalPortfolioOutflow: number;
+  netPortfolioFlow: number;
+  totalPortfolioLoans: number;
+  houses: HouseAnalyticsItem[];
+}
+
+export interface HouseAnalyticsSectionProps {
+  data: HouseAnalyticsSummary;
+}
+
+export type RentalMonthStatus =
+  | "PAID"
+  | "COMBINED_PRIMARY"
+  | "COMBINED_COVERED"
+  | "MISSING"
+  | "VACANT"
+  | "UPCOMING";
+
+export interface RentalMonthCell {
+  month: number;
+  monthName: string;
+  status: RentalMonthStatus;
+  amount: number;
+  effectiveMonthlyAmount: number;
+  transactionId?: number;
+  transactionDate?: string;
+  transactionTitle?: string;
+  coveredMonths?: number[];
+  coveredByMonth?: number;
+  isVacant?: boolean;
+  notes?: string;
+}
+
+export interface RentalUnitSummary {
+  unitName: string;
+  houseId?: number;
+  houseName?: string;
+  months: RentalMonthCell[];
+  annualCollected: number;
+  expectedMonthlyRent: number;
+  expectedAnnualRent: number;
+  paidMonthsCount: number;
+  missingMonthsCount: number;
+  vacantMonthsCount: number;
+  combinedPaymentsCount: number;
+  occupancyRate: number;
+  collectionRate: number;
+}
+
+export interface RentalIncomeAnalyticsSummary {
+  year: number;
+  availableYears: number[];
+  units: RentalUnitSummary[];
+  totalAnnualCollected: number;
+  totalExpectedAnnualRent: number;
+  overallCollectionRate: number;
+  totalMissingMonths: number;
+  totalVacantMonths: number;
+  totalMultiMonthPayments: number;
+  overallOccupancyRate: number;
+  monthlyTotals: { month: number; monthName: string; total: number }[];
+}
+
+export interface RentalIncomeSectionProps {
+  data: RentalIncomeAnalyticsSummary;
+  selectedYear: number;
+  initialViewMode?: "TIMELINE" | "MATRIX" | "TABLE";
+}
+
 export interface AnalyticsPageProps {
   searchParams: Promise<{
     houseId?: string;
@@ -102,5 +196,7 @@ export interface AnalyticsPageProps {
     startDate?: string;
     endDate?: string;
     mode?: string;
+    rentalYear?: string;
+    rentalView?: string;
   }>;
 }

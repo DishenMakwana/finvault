@@ -7,6 +7,7 @@ import { getUniqueCategories } from "@/lib/actions/cashflow.actions";
 import { Sidebar } from "@/components/sidebar";
 import { Header } from "@/components/header";
 import { UserStoreProvider } from "@/components/providers/user-store-provider";
+import type { HouseOption } from "@/types/settings.types";
 
 export const metadata: Metadata = {
   title: "FinVault — Digital Cash Flow & Relative Loan Management",
@@ -43,13 +44,11 @@ export default async function RootLayout({
         {user ? (
           <UserStoreProvider
             user={{ id: user.id, email: user.email, name: user.name }}
-            houses={houses.map(
-              (h: { id: number | string; name: string; initialCash: any }) => ({
-                id: h.id,
-                name: h.name,
-                initialCash: Number(h.initialCash),
-              })
-            )}
+            houses={houses.map((h: HouseOption) => ({
+              id: h.id,
+              name: h.name,
+              initialCash: Number(h.initialCash),
+            }))}
             activeSessionsCount={activeSessions.length}
           >
             <div className="flex min-h-screen">

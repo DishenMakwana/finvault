@@ -68,7 +68,7 @@ export async function GET() {
       [
         "2026-01-15",
         "Groceries & Supermarket Supplies",
-        "Monthly ration",
+        "Monthly pantry supplies",
         "Main House",
         "GROCERIES",
         "OUTFLOW",
@@ -121,8 +121,8 @@ export async function GET() {
       ],
       [
         "2026-02-14",
-        "Family Dinner & Celebration",
-        "Anniversary dinner",
+        "Team Lunch & Networking Dining",
+        "Business dining expense",
         "Main House",
         "LIFESTYLE",
         "OUTFLOW",
@@ -166,8 +166,8 @@ export async function GET() {
       ],
       [
         "2026-03-12",
-        "Home Plumbing & Maintenance",
-        "Kitchen repairs",
+        "Property Plumbing & Maintenance",
+        "Facility repairs",
         "Main House",
         "MAINTENANCE",
         "OUTFLOW",
