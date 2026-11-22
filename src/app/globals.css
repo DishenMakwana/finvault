@@ -1,0 +1,90 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  /* Typography */
+  --font-sans: var(--font-geist-sans, ui-sans-serif, system-ui, sans-serif);
+
+  /* ==========================================================================
+     GLOBAL THEME VARIABLES & COLOR PALETTE
+     FinVault Design System: Pitch-Black Dark Fintech Theme
+     All components reference these variables. Edit here to update the entire app.
+     ========================================================================== */
+
+  /* Canvas & Containers */
+  --background: #0A0A0A;
+  --foreground: #FFFFFF;
+  --sidebar: #0D0D0D;
+  --card: #141414;
+  --card-hover: #1C1C1C;
+  --surface: #181818;
+  --surface-hover: #1C1C1C;
+  --surface-elevated: #202020;
+  --surface-pill: #1F1F1F;
+  --surface-modal: #121212;
+
+  /* Borders & Dividers */
+  --border-subtle: #242424;
+  --border-muted: #262626;
+  --border-hover: #333333;
+  --border-contrast: #383838;
+  --border-active: #2E2E2E;
+
+  /* Primary Accent (Mint / Emerald) - Channels for Tailwind alpha opacity */
+  --primary-rgb: 0 208 132;
+  --color-primary: #00D084;
+  --color-primary-hover: #00B975;
+  --bg-primary-tint: #0D1912;
+
+  /* Danger / Outflow Accent (Rose) */
+  --danger-rgb: 244 63 94;
+  --color-danger: #F43F5E;
+  --color-danger-hover: #E11D48;
+  --bg-danger-tint: #221215;
+
+  /* Loans / Repayment Accent (Indigo / Purple) */
+  --loan-rgb: 99 102 241;
+  --loan-light-rgb: 129 140 248;
+  --color-loan: #6366F1;
+  --color-loan-light: #818CF8;
+  --bg-loan-tint: #14142B;
+
+  /* Warning Accent (Amber) */
+  --amber-rgb: 245 158 11;
+  --color-amber: #F59E0B;
+
+  /* System Accent (Cyan) */
+  --cyan-rgb: 6 182 212;
+  --color-cyan: #06B6D4;
+
+  /* Text Muted Levels */
+  --text-muted: #71717A;
+  --text-subtle: #8E8E93;
+}
+
+body {
+  color: var(--foreground);
+  background: var(--background);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  overflow-x: hidden;
+}
+
+/* Custom sleek scrollbar for dark theme */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--background);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-subtle);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--border-hover);
+}

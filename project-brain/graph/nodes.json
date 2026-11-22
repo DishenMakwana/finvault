@@ -1,0 +1,20 @@
+{
+  "nodes": [
+    { "id": "Route:Root", "type": "route", "path": "src/app/page.tsx", "title": "Dashboard Overview" },
+    { "id": "Route:Transactions", "type": "route", "path": "src/app/transactions/page.tsx", "title": "Transactions & Filters" },
+    { "id": "Route:Loans", "type": "route", "path": "src/app/loans/page.tsx", "title": "Relative Loans" },
+    { "id": "Route:Houses", "type": "route", "path": "src/app/houses/page.tsx", "title": "House Manager" },
+    { "id": "Route:Settings", "type": "route", "path": "src/app/settings/page.tsx", "title": "Active Sessions" },
+    { "id": "Route:Login", "type": "route", "path": "src/app/login/page.tsx", "title": "Auth" },
+    { "id": "Action:Auth", "type": "action", "path": "src/lib/actions/auth.actions.ts" },
+    { "id": "Action:Cashflow", "type": "action", "path": "src/lib/actions/cashflow.actions.ts" },
+    { "id": "Action:Loan", "type": "action", "path": "src/lib/actions/loan.actions.ts" },
+    { "id": "Action:House", "type": "action", "path": "src/lib/actions/house.actions.ts" },
+    { "id": "Model:User", "type": "model", "path": "prisma/schema.prisma" },
+    { "id": "Model:Session", "type": "model", "path": "prisma/schema.prisma" },
+    { "id": "Model:House", "type": "model", "path": "prisma/schema.prisma" },
+    { "id": "Model:Transaction", "type": "model", "path": "prisma/schema.prisma" },
+    { "id": "Model:Loan", "type": "model", "path": "prisma/schema.prisma" },
+    { "id": "Model:LoanRepayment", "type": "model", "path": "prisma/schema.prisma" }
+  ]
+}

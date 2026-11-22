@@ -1,0 +1,9 @@
+{
+  "indices": {
+    "auth": ["Route:Login", "Action:Auth", "Model:User", "Model:Session"],
+    "cashflow": ["Route:Root", "Route:Transactions", "Action:Cashflow", "Model:Transaction", "Model:House"],
+    "loans": ["Route:Root", "Route:Loans", "Action:Loan", "Model:Loan", "Model:LoanRepayment"],
+    "houses": ["Route:Houses", "Action:House", "Model:House"],
+    "sessions": ["Route:Settings", "Action:Auth", "Model:Session"]
+  }
+}

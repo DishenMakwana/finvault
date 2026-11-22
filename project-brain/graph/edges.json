@@ -1,0 +1,17 @@
+{
+  "edges": [
+    { "source": "Route:Root", "target": "Action:Cashflow", "relation": "fetches_and_mutates" },
+    { "source": "Route:Root", "target": "Action:Loan", "relation": "fetches_and_mutates" },
+    { "source": "Route:Root", "target": "Action:House", "relation": "fetches" },
+    { "source": "Route:Transactions", "target": "Action:Cashflow", "relation": "filters_and_exports" },
+    { "source": "Route:Loans", "target": "Action:Loan", "relation": "records_repayments" },
+    { "source": "Route:Houses", "target": "Action:House", "relation": "sets_initial_cash" },
+    { "source": "Route:Settings", "target": "Action:Auth", "relation": "revokes_sessions" },
+    { "source": "Action:Auth", "target": "Model:User", "relation": "manages" },
+    { "source": "Action:Auth", "target": "Model:Session", "relation": "manages" },
+    { "source": "Action:Cashflow", "target": "Model:Transaction", "relation": "reads_writes" },
+    { "source": "Action:Cashflow", "target": "Model:House", "relation": "reconciles" },
+    { "source": "Action:Loan", "target": "Model:Loan", "relation": "reads_writes" },
+    { "source": "Action:Loan", "target": "Model:LoanRepayment", "relation": "creates" }
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "entry": [
+    "src/app/**/*.{ts,tsx}",
+    "prisma/seeds/seed.ts",
+    "src/lib/passport-jwt.ts"
+  ],
+  "project": [
+    "src/**/*.{ts,tsx}"
+  ]
+}
