@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import { motion } from "framer-motion";
 import {
   ResponsiveContainer,
   BarChart,
@@ -187,7 +188,12 @@ export function CategoryBarChart({
   const lowestCategory = items.length > 1 ? items[items.length - 1] : null;
 
   return (
-    <div className="bg-card border border-border-subtle rounded-2xl p-6 shadow-xl space-y-6">
+    <motion.div
+      initial={{ opacity: 0, y: 14 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.35, delay: 0.15, ease: "easeOut" }}
+      className="bg-card border border-border-subtle rounded-2xl p-6 shadow-xl space-y-6"
+    >
       {/* Top Header Row */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
         {/* Title */}
@@ -662,6 +668,6 @@ export function CategoryBarChart({
           </div>
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }

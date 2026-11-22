@@ -2,6 +2,7 @@
 
 import React from "react";
 import Link from "next/link";
+import { motion } from "framer-motion";
 import { ArrowUpRight, ArrowDownRight, Flag } from "lucide-react";
 import { formatINR, formatDate } from "@/lib/formatters";
 import { RecentFeedProps } from "@/types/dashboard.types";
@@ -31,7 +32,16 @@ export function RecentFeed({ transactions }: RecentFeedProps) {
   }
 
   return (
-    <div className="bg-card border border-border-subtle rounded-2xl p-6 shadow-lg">
+    <motion.div
+      initial={{ opacity: 0, y: 14 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{
+        duration: 0.35,
+        delay: 0.2,
+        ease: [0.21, 0.47, 0.32, 0.98],
+      }}
+      className="bg-card border border-border-subtle rounded-2xl p-6 shadow-lg"
+    >
       <div className="flex items-center justify-between mb-4">
         <div>
           <h4 className="text-sm font-bold text-white tracking-tight">
@@ -118,6 +128,6 @@ export function RecentFeed({ transactions }: RecentFeedProps) {
           );
         })}
       </div>
-    </div>
+    </motion.div>
   );
 }

@@ -2,6 +2,7 @@
 
 import React, { useState, useTransition, useRef, useEffect } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import { motion } from "framer-motion";
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -297,7 +298,12 @@ export function CashflowAnalyticsChart({
   const presets: AnalyticsDatePreset[] = ["3M", "6M", "1Y", "2Y", "3Y", "ALL"];
 
   return (
-    <div className="bg-card border border-border-subtle rounded-2xl p-6 shadow-xl space-y-6">
+    <motion.div
+      initial={{ opacity: 0, y: 14 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.35, delay: 0.1, ease: "easeOut" }}
+      className="bg-card border border-border-subtle rounded-2xl p-6 shadow-xl space-y-6"
+    >
       {/* Top Header: Clean 2-Row Layout with Distinct Visual Hierarchy */}
       <div className="space-y-4">
         {/* Row 1: Context & Property Scope */}
@@ -630,6 +636,6 @@ export function CashflowAnalyticsChart({
           {summary.endDate})
         </div>
       </div>
-    </div>
+    </motion.div>
   );
 }

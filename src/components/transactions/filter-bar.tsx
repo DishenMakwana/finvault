@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef, useEffect, useMemo } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -40,13 +40,16 @@ export function FilterBar({
     rawHouseId !== null ? rawHouseId : defaultHouseId || "ALL";
   const activeType = searchParams.get("type") || "ALL";
   const activeCategoryParam = searchParams.get("category") || "ALL";
-  const selectedCategories =
-    activeCategoryParam === "ALL" || !activeCategoryParam
-      ? []
-      : activeCategoryParam
-          .split(",")
-          .map((c) => c.trim().toLowerCase())
-          .filter(Boolean);
+  const selectedCategories = useMemo(
+    () =>
+      activeCategoryParam === "ALL" || !activeCategoryParam
+        ? []
+        : activeCategoryParam
+            .split(",")
+            .map((c) => c.trim().toLowerCase())
+            .filter(Boolean),
+    [activeCategoryParam]
+  );
   const activeStartDate = searchParams.get("startDate") || "";
   const activeEndDate = searchParams.get("endDate") || "";
   const activeMinAmount = searchParams.get("minAmount") || "";
@@ -76,24 +79,16 @@ export function FilterBar({
     "ALL" | "FLAGGED" | "UNFLAGGED"
   >(activeFlaggedStatus);
 
-  useEffect(() => {
-    if (isModalOpen) {
-      setModalHouseId(activeHouseId);
-      setModalType(activeType);
-      setModalCategories(selectedCategories);
-      setModalMinAmount(activeMinAmount);
-      setModalMaxAmount(activeMaxAmount);
-      setModalFlagged(activeFlaggedStatus);
-    }
-  }, [
-    isModalOpen,
-    activeHouseId,
-    activeType,
-    selectedCategories,
-    activeMinAmount,
-    activeMaxAmount,
-    activeFlaggedStatus,
-  ]);
+  // Open modal and initialize draft state with currently active filters
+  const handleOpenModal = () => {
+    setModalHouseId(activeHouseId);
+    setModalType(activeType);
+    setModalCategories(selectedCategories);
+    setModalMinAmount(activeMinAmount);
+    setModalMaxAmount(activeMaxAmount);
+    setModalFlagged(activeFlaggedStatus);
+    setIsModalOpen(true);
+  };
 
   const presetsRef = useRef<HTMLDivElement>(null);
   const startInputRef = useRef<HTMLInputElement>(null);
@@ -493,7 +488,7 @@ export function FilterBar({
         {/* 4. Filters Button (Opens Modal with Badge) */}
         <button
           type="button"
-          onClick={() => setIsModalOpen(true)}
+          onClick={handleOpenModal}
           className={`h-10 relative flex items-center gap-2 px-3.5 rounded-xl text-xs font-semibold border transition-all ${
             activeFilterCount > 0
               ? "bg-primary-tint border-primary text-primary shadow-sm shadow-primary/10"

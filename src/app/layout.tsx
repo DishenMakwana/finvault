@@ -61,7 +61,7 @@ export default async function RootLayout({
                   inflowCategories={inflowCategories}
                   outflowCategories={outflowCategories}
                 />
-                <main className="flex-1 p-6 max-w-7xl w-full mx-auto">
+                <main className="flex-1 flex flex-col p-6 max-w-7xl w-full mx-auto">
                   {children}
                 </main>
               </div>

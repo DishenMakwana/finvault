@@ -45,6 +45,7 @@ export default async function LoansPage({ searchParams }: LoansPageProps) {
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <KpiCard
+          index={0}
           label="Total Loans Given"
           value={formatINR(totalLent)}
           iconName="loans"
@@ -57,6 +58,7 @@ export default async function LoansPage({ searchParams }: LoansPageProps) {
         />
 
         <KpiCard
+          index={1}
           label="Total Recovered"
           value={formatINR(totalPaid)}
           iconName="check"
@@ -73,6 +75,7 @@ export default async function LoansPage({ searchParams }: LoansPageProps) {
         />
 
         <KpiCard
+          index={2}
           label="Outstanding Balance"
           value={formatINR(totalOutstanding)}
           iconName="alert"
@@ -85,6 +88,7 @@ export default async function LoansPage({ searchParams }: LoansPageProps) {
         />
 
         <KpiCard
+          index={3}
           label="Settled Relatives"
           value={`${fullySettledCount} of ${loans.length}`}
           iconName="clock"

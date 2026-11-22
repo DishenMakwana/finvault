@@ -47,6 +47,7 @@ export function KpiCard({
   deltaText,
   deltaType = "neutral",
   subtext,
+  index = 0,
 }: KpiCardProps) {
   const Icon = (iconName ? ICON_MAP[iconName] : PropIcon) || Coins;
 
@@ -142,6 +143,13 @@ export function KpiCard({
 
   return (
     <motion.div
+      initial={{ opacity: 0, y: 14 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{
+        duration: 0.35,
+        delay: index * 0.05,
+        ease: [0.21, 0.47, 0.32, 0.98],
+      }}
       whileHover={{ y: -3, transition: { duration: 0.18 } }}
       className="relative bg-gradient-to-b from-surface to-background border border-border-subtle hover:border-border-contrast rounded-2xl p-4 shadow-xl transition-all flex flex-col justify-between h-full min-h-[148px] overflow-hidden group"
     >
@@ -156,11 +164,13 @@ export function KpiCard({
           <span className="text-xs font-semibold text-neutral-400 tracking-tight leading-tight truncate">
             {label}
           </span>
-          <div
-            className={`w-8 h-8 rounded-xl flex items-center justify-center border shadow-sm flex-shrink-0 transition-transform duration-200 group-hover:scale-105 ${iconBg} ${iconBorder} ${iconColor}`}
+          <motion.div
+            whileHover={{ scale: 1.1, rotate: [-2, 2, 0] }}
+            transition={{ duration: 0.2 }}
+            className={`w-8 h-8 rounded-xl flex items-center justify-center border shadow-sm flex-shrink-0 transition-transform duration-200 ${iconBg} ${iconBorder} ${iconColor}`}
           >
             <Icon className="w-4 h-4" />
-          </div>
+          </motion.div>
         </div>
 
         {/* Main Figure: Fixed-height vertical slot */}

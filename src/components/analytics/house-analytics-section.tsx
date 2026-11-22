@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useMemo, useEffect } from "react";
+import { motion } from "framer-motion";
 import {
   ResponsiveContainer,
   BarChart,
@@ -123,7 +124,12 @@ export function HouseAnalyticsSection({ data }: HouseAnalyticsSectionProps) {
   }
 
   return (
-    <div className="space-y-4">
+    <motion.div
+      initial={{ opacity: 0, y: 14 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.35, delay: 0.2, ease: "easeOut" }}
+      className="space-y-4"
+    >
       {/* 1. Header Bar with Dribbble-style segmented controls */}
       <div className="bg-card border border-border-subtle rounded-2xl p-5 shadow-xl">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
@@ -791,6 +797,6 @@ export function HouseAnalyticsSection({ data }: HouseAnalyticsSectionProps) {
           );
         })}
       </div>
-    </div>
+    </motion.div>
   );
 }

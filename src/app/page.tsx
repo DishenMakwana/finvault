@@ -86,6 +86,7 @@ export default async function DashboardPage({
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
         {/* Card 1: Current Cash in Hand */}
         <KpiCard
+          index={0}
           label="Current Cash in Hand"
           value={formatINR(currentCashInHand)}
           iconName="cash"
@@ -101,6 +102,7 @@ export default async function DashboardPage({
 
         {/* Card 2: Total Inflow */}
         <KpiCard
+          index={1}
           label="Total Inflow"
           value={formatINR(totalInflow)}
           iconName="inflow"
@@ -114,6 +116,7 @@ export default async function DashboardPage({
 
         {/* Card 3: Total Outflow */}
         <KpiCard
+          index={2}
           label="Total Outflow"
           value={formatINR(totalOutflow)}
           iconName="outflow"
@@ -127,6 +130,7 @@ export default async function DashboardPage({
 
         {/* Card 4: Relative Loans Outstanding */}
         <KpiCard
+          index={3}
           label="Relative Loans (Due)"
           value={formatINR(outstandingLoans)}
           iconName="loans"
@@ -140,6 +144,7 @@ export default async function DashboardPage({
 
         {/* Card 5: Active Sessions & Vault Guard */}
         <KpiCard
+          index={4}
           label="Active Sessions"
           value={`${activeSessions.length} Device${activeSessions.length > 1 ? "s" : ""}`}
           iconName="sessions"

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useTransition, useEffect } from "react";
+import { motion } from "framer-motion";
 import {
   KeyRound,
   Calendar,
@@ -161,7 +162,10 @@ export function RentalIncomeSection({
   };
 
   return (
-    <div
+    <motion.div
+      initial={{ opacity: 0, y: 14 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.35, delay: 0.25, ease: "easeOut" }}
       className={`space-y-4 pt-4 border-t border-border-subtle transition-opacity duration-200 ${
         isPending ? "opacity-75" : "opacity-100"
       }`}
@@ -217,7 +221,10 @@ export function RentalIncomeSection({
       {/* 2. Top 6 KPI Stat Cards Grid */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
         {/* KPI 1: Annual Rental Collected */}
-        <div className="p-4 rounded-2xl bg-card border border-border-subtle shadow-md">
+        <motion.div
+          whileHover={{ y: -2, transition: { duration: 0.15 } }}
+          className="p-4 rounded-2xl bg-card border border-border-subtle shadow-md"
+        >
           <div className="flex items-center justify-between text-neutral-400 mb-2">
             <span className="text-xs font-medium">Annual Collected</span>
             <span className="p-1.5 rounded-lg bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
@@ -230,10 +237,13 @@ export function RentalIncomeSection({
           <span className="text-[10px] text-neutral-500 font-mono mt-0.5 block">
             Target: {formatCompactINR(totalExpectedAnnualRent)}
           </span>
-        </div>
+        </motion.div>
 
         {/* KPI 2: Collection Realization Rate */}
-        <div className="p-4 rounded-2xl bg-card border border-border-subtle shadow-md">
+        <motion.div
+          whileHover={{ y: -2, transition: { duration: 0.15 } }}
+          className="p-4 rounded-2xl bg-card border border-border-subtle shadow-md"
+        >
           <div className="flex items-center justify-between text-neutral-400 mb-2">
             <span className="text-xs font-medium">Collection Rate</span>
             <span className="p-1.5 rounded-lg bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
@@ -246,10 +256,13 @@ export function RentalIncomeSection({
           <span className="text-[10px] text-neutral-500 font-mono mt-0.5 block">
             Received vs Expected
           </span>
-        </div>
+        </motion.div>
 
         {/* KPI 3: Overall Occupancy Rate */}
-        <div className="p-4 rounded-2xl bg-card border border-border-subtle shadow-md">
+        <motion.div
+          whileHover={{ y: -2, transition: { duration: 0.15 } }}
+          className="p-4 rounded-2xl bg-card border border-border-subtle shadow-md"
+        >
           <div className="flex items-center justify-between text-neutral-400 mb-2">
             <span className="text-xs font-medium">Occupancy Rate</span>
             <span className="p-1.5 rounded-lg bg-cyan/10 text-cyan border border-cyan/20">
@@ -262,10 +275,13 @@ export function RentalIncomeSection({
           <span className="text-[10px] text-neutral-500 font-mono mt-0.5 block">
             Occupied vs Eligible
           </span>
-        </div>
+        </motion.div>
 
         {/* KPI 4: Missing / Overdue Months */}
-        <div className="p-4 rounded-2xl bg-card border border-border-subtle shadow-md">
+        <motion.div
+          whileHover={{ y: -2, transition: { duration: 0.15 } }}
+          className="p-4 rounded-2xl bg-card border border-border-subtle shadow-md"
+        >
           <div className="flex items-center justify-between text-neutral-400 mb-2">
             <span className="text-xs font-medium">Missing Months</span>
             <span className="p-1.5 rounded-lg bg-rose-500/10 text-rose-400 border border-rose-500/20">
@@ -284,10 +300,13 @@ export function RentalIncomeSection({
               ? "Unpaid / Unrecorded Rent"
               : "All Paid Up"}
           </span>
-        </div>
+        </motion.div>
 
         {/* KPI 5: Vacant / Unrented Months */}
-        <div className="p-4 rounded-2xl bg-card border border-border-subtle shadow-md">
+        <motion.div
+          whileHover={{ y: -2, transition: { duration: 0.15 } }}
+          className="p-4 rounded-2xl bg-card border border-border-subtle shadow-md"
+        >
           <div className="flex items-center justify-between text-neutral-400 mb-2">
             <span className="text-xs font-medium">Vacant Months</span>
             <span className="p-1.5 rounded-lg bg-neutral-800 text-neutral-300 border border-neutral-700">
@@ -300,10 +319,13 @@ export function RentalIncomeSection({
           <span className="text-[10px] text-neutral-500 font-mono mt-0.5 block">
             No Tenant on Rent (Empty)
           </span>
-        </div>
+        </motion.div>
 
         {/* KPI 6: 2-Month Combined Payments */}
-        <div className="p-4 rounded-2xl bg-card border border-border-subtle shadow-md">
+        <motion.div
+          whileHover={{ y: -2, transition: { duration: 0.15 } }}
+          className="p-4 rounded-2xl bg-card border border-border-subtle shadow-md"
+        >
           <div className="flex items-center justify-between text-neutral-400 mb-2">
             <span className="text-xs font-medium">Combined Payments</span>
             <span className="p-1.5 rounded-lg bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
@@ -316,7 +338,7 @@ export function RentalIncomeSection({
           <span className="text-[10px] text-neutral-500 font-mono mt-0.5 block">
             Multi-Month Rent Receipts
           </span>
-        </div>
+        </motion.div>
       </div>
 
       {/* 3. Legend & View Controls Bar */}
@@ -1320,6 +1342,6 @@ export function RentalIncomeSection({
           </div>
         </div>
       )}
-    </div>
+    </motion.div>
   );
 }

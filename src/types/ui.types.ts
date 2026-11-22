@@ -49,3 +49,15 @@ export interface ConfirmDeleteModalProps {
 export interface SparkleStarProps {
   className?: string;
 }
+
+export type LoadingTheme = "teal" | "blue" | "purple" | "amber" | "rose";
+export type LoadingSize = "sm" | "md" | "lg";
+
+export interface PremiumLoadingProps {
+  title?: string;
+  subtitle?: string;
+  theme?: LoadingTheme;
+  size?: LoadingSize;
+  fullScreen?: boolean;
+  className?: string;
+}

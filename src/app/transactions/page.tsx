@@ -106,6 +106,7 @@ export default async function TransactionsPage({
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Card 1: Total Inflow */}
         <KpiCard
+          index={0}
           label="Total Inflow"
           value={formatINR(totalInflow)}
           iconName="inflow"
@@ -119,6 +120,7 @@ export default async function TransactionsPage({
 
         {/* Card 2: Total Outflow */}
         <KpiCard
+          index={1}
           label="Total Outflow"
           value={formatINR(totalOutflow)}
           iconName="outflow"
@@ -132,6 +134,7 @@ export default async function TransactionsPage({
 
         {/* Card 3: Net Cash Flow */}
         <KpiCard
+          index={2}
           label="Net Cash Flow"
           value={`${netFlow >= 0 ? "+" : ""}${formatINR(netFlow)}`}
           iconName="cash"
@@ -145,6 +148,7 @@ export default async function TransactionsPage({
 
         {/* Card 4: Filtered Records */}
         <KpiCard
+          index={3}
           label="Filtered Records"
           value={`${transactions.length} Records`}
           iconName="sessions"

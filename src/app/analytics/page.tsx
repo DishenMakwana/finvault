@@ -75,6 +75,7 @@ export default async function AnalyticsPage({
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Card 1: Total Inflow */}
         <KpiCard
+          index={0}
           label="Total Inflow"
           value={formatINR(summary.totalInflow)}
           iconName="inflow"
@@ -88,6 +89,7 @@ export default async function AnalyticsPage({
 
         {/* Card 2: Total Outflow */}
         <KpiCard
+          index={1}
           label="Total Outflow"
           value={formatINR(summary.totalOutflow)}
           iconName="outflow"
@@ -101,6 +103,7 @@ export default async function AnalyticsPage({
 
         {/* Card 3: Net Cash Flow */}
         <KpiCard
+          index={2}
           label="Net Cash Position"
           value={`${summary.netCashFlow >= 0 ? "+" : ""}${formatINR(summary.netCashFlow)}`}
           iconName="cash"
@@ -120,6 +123,7 @@ export default async function AnalyticsPage({
 
         {/* Card 4: Data Points & Range */}
         <KpiCard
+          index={3}
           label="Active Window"
           value={`${summary.dataPointCount} Points`}
           iconName="sessions"

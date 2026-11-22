@@ -28,6 +28,7 @@ export interface KpiCardProps {
   deltaText?: string;
   deltaType?: "positive" | "negative" | "neutral";
   subtext?: string;
+  index?: number;
 }
 
 export interface QuickModalProps {

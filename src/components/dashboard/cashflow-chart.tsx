@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useTransition } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import { motion } from "framer-motion";
 import {
   AreaChart,
   Area,
@@ -114,7 +115,12 @@ export function CashflowChart({
   const hasData = chartData && chartData.length > 0;
 
   return (
-    <div className="bg-card border border-border-subtle rounded-2xl p-6 shadow-lg relative">
+    <motion.div
+      initial={{ opacity: 0, y: 14 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.35, delay: 0.1, ease: "easeOut" }}
+      className="bg-card border border-border-subtle rounded-2xl p-6 shadow-lg relative"
+    >
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
         <div>
           <div className="flex items-center gap-2">
@@ -262,6 +268,6 @@ export function CashflowChart({
           </ResponsiveContainer>
         </div>
       )}
-    </div>
+    </motion.div>
   );
 }
