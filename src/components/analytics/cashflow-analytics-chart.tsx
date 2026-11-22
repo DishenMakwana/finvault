@@ -1,13 +1,18 @@
 "use client";
 
-import React, { useState, useTransition, useRef, useEffect } from "react";
+import {
+  useState,
+  useTransition,
+  useRef,
+  useEffect,
+  type ChangeEvent,
+} from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import {
   ResponsiveContainer,
   ComposedChart,
   Area,
-  Line,
   XAxis,
   YAxis,
   Tooltip,
@@ -16,15 +21,11 @@ import {
 import {
   TrendingUp,
   Calendar,
-  Layers,
   BarChart3,
-  Check,
   ChevronDown,
   X,
   Building2,
   Tag,
-  ArrowUpRight,
-  ArrowDownRight,
 } from "lucide-react";
 import {
   CashflowAnalyticsChartProps,
@@ -46,7 +47,7 @@ export function CashflowAnalyticsChart({
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const [isPending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
 
   const [viewMode, setViewMode] = useState<AnalyticsViewMode>(currentMode);
   const [isMounted, setIsMounted] = useState(false);
@@ -113,7 +114,7 @@ export function CashflowAnalyticsChart({
     });
   };
 
-  const handleHouseChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+  const handleHouseChange = (e: ChangeEvent<HTMLSelectElement>) => {
     updateFilters({ houseId: e.target.value });
   };
 
@@ -488,13 +489,13 @@ export function CashflowAnalyticsChart({
       {/* Recharts Area Canvas */}
       <div className="w-full h-[460px] pt-4 select-none">
         {points.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center text-neutral-500">
-            <BarChart3 className="w-10 h-10 mb-2 opacity-50" />
-            <p className="text-sm font-semibold">
-              No transactions recorded in this date range.
+          <div className="h-full flex flex-col items-center justify-center text-neutral-400">
+            <p className="text-sm font-medium text-neutral-300">
+              No records found.
             </p>
-            <p className="text-xs">
-              Adjust range filters or select another property.
+            <p className="text-xs text-neutral-500 mt-1">
+              Use &quot;+ Add Inflow&quot; or &quot;- Add Outflow&quot; above to
+              start logging.
             </p>
           </div>
         ) : !isMounted ? (

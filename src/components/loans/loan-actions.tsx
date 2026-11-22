@@ -1,17 +1,14 @@
 "use client";
 
-import React, { useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useState } from "react";
 import { HandCoins } from "lucide-react";
 import { AddLoanModal } from "@/components/dashboard/add-loan-modal";
 import { LoanActionsProps } from "@/types/loans.types";
 
 export function LoanActions({ houses }: LoanActionsProps) {
   const [isLoanOpen, setIsLoanOpen] = useState(false);
-  const searchParams = useSearchParams();
-  const currentHouseId = searchParams.get("houseId");
-  const defaultHouseId =
-    currentHouseId && currentHouseId !== "ALL" ? currentHouseId : houses[0]?.id;
+  const userHome = houses.find((h) => h.isOwner);
+  const defaultHouseId = userHome ? String(userHome.id) : houses[0]?.id;
 
   return (
     <>

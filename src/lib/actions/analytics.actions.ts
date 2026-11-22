@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { cacheGet, cacheSet, cacheInvalidateTag } from "@/lib/cache";
+import { resolveTargetHouseIds } from "@/lib/house-query";
 import {
   AnalyticsFilterParams,
   CashflowAnalyticsResponse,
@@ -16,7 +17,6 @@ import {
   RentalIncomeAnalyticsSummary,
   RentalUnitSummary,
   RentalMonthCell,
-  RentalMonthStatus,
 } from "@/types/analytics.types";
 
 function formatPointLabel(d: Date): string {
@@ -162,7 +162,9 @@ export async function getCashflowAnalytics(
 
   const { houseId, range = "1Y", startDate, endDate } = params;
 
-  const cacheKey = `analytics:${user.id}:${houseId || "all"}:${range}:${startDate || ""}:${endDate || ""}`;
+  const { targetIds, cacheKeySegment } = await resolveTargetHouseIds(houseId);
+
+  const cacheKey = `analytics:${user.id}:${cacheKeySegment}:${range}:${startDate || ""}:${endDate || ""}`;
   const cached = cacheGet<CashflowAnalyticsResponse>(cacheKey);
   if (cached) return cached;
 
@@ -229,18 +231,12 @@ export async function getCashflowAnalytics(
   // Build where filter
   const where: any = {
     deletedAt: null,
+    houseId: { in: targetIds },
     dateOfAdd: {
       gte: computedStart,
       lte: computedEnd,
     },
   };
-
-  if (houseId && houseId !== "ALL") {
-    const hId = typeof houseId === "number" ? houseId : parseInt(houseId, 10);
-    if (!isNaN(hId)) {
-      where.houseId = hId;
-    }
-  }
 
   // Fetch transactions with selective projection
   const transactions = await prisma.transaction.findMany({
@@ -415,7 +411,9 @@ const HOUSE_PALETTE = [
   "#14b8a6", // Teal
 ];
 
-export async function getHouseAnalyticsData(): Promise<HouseAnalyticsSummary> {
+export async function getHouseAnalyticsData(
+  selectedHouseId?: string | number
+): Promise<HouseAnalyticsSummary> {
   const user = await getCurrentUser();
   if (!user) {
     return {
@@ -429,14 +427,20 @@ export async function getHouseAnalyticsData(): Promise<HouseAnalyticsSummary> {
     };
   }
 
-  const cacheKey = `analytics:houses:${user.id}`;
+  const { targetIds, cacheKeySegment } =
+    await resolveTargetHouseIds(selectedHouseId);
+
+  const cacheKey = `analytics:houses:${user.id}:${cacheKeySegment}`;
   const cached = cacheGet<HouseAnalyticsSummary>(cacheKey);
   if (cached) return cached;
 
-  // Fetch houses, non-deleted transactions, and loans concurrently
+  // Fetch houses, non-deleted transactions, and loans based on target house IDs (never restricted by userId)
   const [houses, transactions, loans] = await Promise.all([
     prisma.house.findMany({
-      where: { userId: user.id },
+      where: {
+        deletedAt: null,
+        id: { in: targetIds },
+      },
       select: {
         id: true,
         name: true,
@@ -446,8 +450,8 @@ export async function getHouseAnalyticsData(): Promise<HouseAnalyticsSummary> {
     }),
     prisma.transaction.findMany({
       where: {
-        userId: user.id,
         deletedAt: null,
+        houseId: { in: targetIds },
       },
       select: {
         id: true,
@@ -459,8 +463,8 @@ export async function getHouseAnalyticsData(): Promise<HouseAnalyticsSummary> {
     }),
     prisma.loan.findMany({
       where: {
-        userId: user.id,
         deletedAt: null,
+        houseId: { in: targetIds },
       },
       select: {
         houseId: true,
@@ -738,7 +742,7 @@ function computeExpectedMonthlyRent(rates: number[]): number {
 
 export async function getRentalIncomeAnalyticsData(
   selectedYear?: number,
-  filterHouseId?: number
+  filterHouseId?: number | string
 ): Promise<RentalIncomeAnalyticsSummary> {
   const user = await getCurrentUser();
   const now = new Date();
@@ -768,18 +772,21 @@ export async function getRentalIncomeAnalyticsData(
     return defaultEmptySummary;
   }
 
-  const cacheKey = `rental_analytics:${user.id}:${year}:${filterHouseId || "all"}`;
+  const { targetIds, cacheKeySegment } =
+    await resolveTargetHouseIds(filterHouseId);
+
+  const cacheKey = `rental_analytics:${user.id}:${year}:${cacheKeySegment}`;
   const cached = cacheGet<RentalIncomeAnalyticsSummary>(cacheKey);
   if (cached) return cached;
 
+  // Query transactions based on target house IDs (never restricted by user.id so all family properties show when selected)
   const [allHistoricalRentalTx, vacancies] = await Promise.all([
     prisma.transaction.findMany({
       where: {
-        userId: user.id,
         deletedAt: null,
         type: "INFLOW",
         category: { equals: "rental income", mode: "insensitive" },
-        ...(filterHouseId ? { houseId: filterHouseId } : {}),
+        houseId: { in: targetIds },
       },
       select: {
         id: true,
@@ -793,7 +800,6 @@ export async function getRentalIncomeAnalyticsData(
     }),
     prisma.rentalVacancy.findMany({
       where: {
-        userId: user.id,
         year,
       },
     }),

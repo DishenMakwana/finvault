@@ -1,7 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useState } from "react";
 import { Plus, Minus, Upload } from "lucide-react";
 import { AddInflowModal } from "@/components/dashboard/add-inflow-modal";
 import { AddOutflowModal } from "@/components/dashboard/add-outflow-modal";
@@ -17,12 +16,8 @@ export function TransactionActions({
   const [isInflowOpen, setIsInflowOpen] = useState(false);
   const [isOutflowOpen, setIsOutflowOpen] = useState(false);
   const [isUploadOpen, setIsUploadOpen] = useState(false);
-  const searchParams = useSearchParams();
-  const currentHouseId = searchParams.get("houseId");
   const defaultHouseId =
-    currentHouseId && currentHouseId !== "ALL"
-      ? currentHouseId
-      : propDefaultHouseId || houses[0]?.id;
+    propDefaultHouseId || houses.find((h) => h.isOwner)?.id || houses[0]?.id;
 
   return (
     <>

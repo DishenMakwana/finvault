@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
   ResponsiveContainer,
@@ -20,9 +20,6 @@ import {
   TrendingUp,
   Layers,
   Sparkles,
-  ArrowUpRight,
-  ArrowDownRight,
-  Calculator,
   Percent,
   Coins,
 } from "lucide-react";
@@ -377,10 +374,13 @@ export function CategoryBarChart({
         return (
           <div className="w-full h-[450px] pt-4 select-none">
             {items.length === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center text-neutral-500">
-                <BarChart3 className="w-10 h-10 mb-2 opacity-50" />
-                <p className="text-sm font-semibold">
-                  No categories found for this selection.
+              <div className="h-full flex flex-col items-center justify-center text-neutral-400">
+                <p className="text-sm font-medium text-neutral-300">
+                  No records found.
+                </p>
+                <p className="text-xs text-neutral-500 mt-1">
+                  Use &quot;+ Add Inflow&quot; or &quot;- Add Outflow&quot;
+                  above to start logging.
                 </p>
               </div>
             ) : !isMounted ? (

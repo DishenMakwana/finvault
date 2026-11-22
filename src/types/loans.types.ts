@@ -22,6 +22,7 @@ interface LoanItem {
 export interface LoanCardProps {
   loan: LoanItem;
   houses: { id: number | string; name: string }[];
+  index?: number;
 }
 
 export interface RepaymentModalProps {
@@ -37,7 +38,12 @@ export interface RepaymentModalProps {
 }
 
 export interface LoanActionsProps {
-  houses: { id: number | string; name: string }[];
+  houses: {
+    id: number | string;
+    name: string;
+    isOwner?: boolean;
+    userId?: number;
+  }[];
 }
 
 export interface LoansPageProps {

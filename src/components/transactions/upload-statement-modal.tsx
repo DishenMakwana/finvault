@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, DragEvent } from "react";
+import { useState, useRef, type DragEvent, type ChangeEvent } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   FileSpreadsheet,
@@ -83,7 +83,7 @@ export function UploadStatementModal({
     }
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       validateAndSetFile(e.target.files[0]);
     }

@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState } from "react";
+import { useState, type FormEvent } from "react";
+import { motion } from "framer-motion";
 import {
   Home,
   Plus,
@@ -25,7 +26,7 @@ export function HouseList({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleCreate = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleCreate = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
@@ -57,7 +58,12 @@ export function HouseList({
   return (
     <>
       {/* Top Action & Total Summary (Current Cash as Primary) */}
-      <div className="bg-card border border-border-subtle rounded-2xl p-6 shadow-xl flex flex-wrap items-center justify-between gap-6">
+      <motion.div
+        initial={{ opacity: 0, y: 14 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35, ease: "easeOut" }}
+        className="bg-card border border-border-subtle rounded-2xl p-6 shadow-xl flex flex-wrap items-center justify-between gap-6"
+      >
         <div className="flex items-center gap-4">
           <div className="w-14 h-14 rounded-2xl bg-primary/10 border border-primary/30 flex items-center justify-center text-primary shrink-0">
             <Coins className="w-7 h-7" />
@@ -104,18 +110,26 @@ export function HouseList({
           <Plus className="w-4 h-4" />
           <span>Add New House</span>
         </button>
-      </div>
+      </motion.div>
 
       {/* Houses Cards Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {houses.map((house) => {
+        {houses.map((house, idx) => {
           const currentBalance = house.currentCash ?? Number(house.initialCash);
           const initialBalance = Number(house.initialCash);
           const diff = currentBalance - initialBalance;
 
           return (
-            <div
+            <motion.div
               key={house.id}
+              initial={{ opacity: 0, y: 14 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{
+                duration: 0.35,
+                delay: 0.08 + idx * 0.04,
+                ease: "easeOut",
+              }}
+              whileHover={{ y: -3 }}
               className="bg-card border border-border-subtle hover:border-border-hover rounded-2xl p-5 shadow-lg flex flex-col justify-between transition-all"
             >
               <div>
@@ -207,7 +221,7 @@ export function HouseList({
                   Live Reconciled
                 </span>
               </div>
-            </div>
+            </motion.div>
           );
         })}
       </div>

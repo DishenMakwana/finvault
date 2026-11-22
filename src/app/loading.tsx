@@ -1,4 +1,3 @@
-import React from "react";
 import { PremiumLoading } from "@/components/ui/premium-loading";
 
 export default function RootLoading() {

@@ -1,30 +1,21 @@
 "use client";
 
-import React, { useState } from "react";
-import { loginUser, registerUser } from "@/lib/actions/auth.actions";
-import {
-  Lock,
-  Mail,
-  User,
-  ArrowRight,
-  TrendingUp,
-  ShieldCheck,
-} from "lucide-react";
+import { useState, type FormEvent } from "react";
+import { loginUser } from "@/lib/actions/auth.actions";
+import { Lock, Mail, ArrowRight, Coins, ShieldCheck } from "lucide-react";
 import { motion } from "framer-motion";
 
 export default function LoginPage() {
-  const [isRegister, setIsRegister] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
 
     const formData = new FormData(e.currentTarget);
-    const action = isRegister ? registerUser : loginUser;
-    const res = await action(formData);
+    const res = await loginUser(formData);
 
     setLoading(false);
     if (res?.error) {
@@ -45,15 +36,13 @@ export default function LoginPage() {
         {/* Branding */}
         <div className="flex flex-col items-center text-center mb-8">
           <div className="w-14 h-14 rounded-2xl bg-primary flex items-center justify-center text-black font-bold mb-3 shadow-lg shadow-primary/20">
-            <TrendingUp className="w-7 h-7 stroke-[2.5]" />
+            <Coins className="w-7 h-7 stroke-[2.5]" />
           </div>
           <h1 className="text-2xl font-bold tracking-tight text-white">
             FinVault
           </h1>
           <p className="text-xs text-neutral-400 mt-1">
-            {isRegister
-              ? "Create your FinVault account"
-              : "Sign in to access your cash inflow, outflow & loans"}
+            Sign in to access your cash inflow, outflow & loans
           </p>
         </div>
 
@@ -66,23 +55,6 @@ export default function LoginPage() {
 
         {/* Auth Form */}
         <form onSubmit={handleSubmit} className="space-y-4">
-          {isRegister && (
-            <div>
-              <label className="block text-xs font-semibold text-neutral-300 mb-1.5">
-                Full Name
-              </label>
-              <div className="relative">
-                <User className="w-4 h-4 text-neutral-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                <input
-                  type="text"
-                  name="name"
-                  placeholder="e.g. John Doe"
-                  className="w-full bg-surface border border-border-muted rounded-xl pl-10 pr-4 py-2.5 text-xs text-white focus:outline-none focus:border-primary"
-                />
-              </div>
-            </div>
-          )}
-
           <div>
             <label className="block text-xs font-semibold text-neutral-300 mb-1.5">
               Email Address
@@ -120,45 +92,15 @@ export default function LoginPage() {
             disabled={loading}
             className="w-full flex items-center justify-center gap-2 py-3 px-4 rounded-xl text-xs font-bold text-black bg-primary hover:bg-primary/90 transition-all shadow-lg shadow-primary/10 disabled:opacity-50 mt-2"
           >
-            <span>
-              {loading
-                ? "Processing..."
-                : isRegister
-                  ? "Create Vault Account"
-                  : "Sign In to Vault"}
-            </span>
+            <span>{loading ? "Processing..." : "Sign In to Vault"}</span>
             <ArrowRight className="w-3.5 h-3.5" />
           </button>
         </form>
 
-        {/* Toggle Mode */}
-        <div className="mt-6 pt-5 border-t border-border-subtle text-center">
-          <button
-            type="button"
-            onClick={() => {
-              setIsRegister(!isRegister);
-              setError(null);
-            }}
-            className="text-xs text-neutral-400 hover:text-white transition-colors"
-          >
-            {isRegister ? (
-              <>
-                Already have an account?{" "}
-                <span className="text-primary font-semibold">Sign In</span>
-              </>
-            ) : (
-              <>
-                Don&apos;t have an account?{" "}
-                <span className="text-primary font-semibold">Register</span>
-              </>
-            )}
-          </button>
-        </div>
-
         {/* Footer Security Badge */}
-        <div className="mt-6 flex items-center justify-center gap-1.5 text-[11px] text-neutral-500">
+        <div className="mt-6 pt-5 border-t border-border-subtle flex items-center justify-center gap-1.5 text-[11px] text-neutral-500 text-center">
           <ShieldCheck className="w-3.5 h-3.5 text-primary" />
-          <span>Secured with Passport-JWT & PostgreSQL</span>
+          <span>Secured</span>
         </div>
       </motion.div>
     </div>

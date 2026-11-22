@@ -2,6 +2,7 @@ import { cache } from "react";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import { cookies, headers } from "next/headers";
+import { redirect } from "next/navigation";
 import { prisma } from "./prisma";
 import { JwtPayload } from "@/types/settings.types";
 import { cacheGet, cacheSet, cacheInvalidateTag } from "./cache";
@@ -41,19 +42,6 @@ function parseExpiryToMs(expiryStr: string): number {
     default:
       return val * 1000;
   }
-}
-
-// Fetch SALT_ROUNDS from environment variable with fallback
-function getSaltRounds(): number {
-  const envRounds = process.env.SALT_ROUNDS;
-  const parsed = envRounds ? parseInt(envRounds, 10) : 10;
-  return isNaN(parsed) || parsed < 4 ? 10 : parsed;
-}
-
-export async function hashPassword(password: string): Promise<string> {
-  const saltRounds = getSaltRounds();
-  const salt = await bcrypt.genSalt(saltRounds);
-  return bcrypt.hash(password, salt);
 }
 
 export async function comparePassword(
@@ -182,6 +170,14 @@ export const getCurrentUser = cache(async () => {
   }
 });
 
+export async function requireAuth() {
+  const user = await getCurrentUser();
+  if (!user) {
+    redirect("/login");
+  }
+  return user;
+}
+
 export async function getActiveSessions(userId: number) {
   const cacheKey = `sessions:${userId}`;
   const cached = cacheGet<any[]>(cacheKey);
@@ -219,7 +215,7 @@ export async function revokeSession(sessionId: number, userId: number) {
   });
 }
 
-async function revokeAllOtherSessions(
+export async function revokeAllOtherSessions(
   currentSessionId: number,
   userId: number
 ) {

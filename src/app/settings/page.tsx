@@ -1,13 +1,8 @@
-import React from "react";
-import { getCurrentUser, getActiveSessions } from "@/lib/auth";
+import { requireAuth, getActiveSessions } from "@/lib/auth";
 import { SessionManager } from "@/components/settings/session-manager";
 
 export default async function SettingsPage() {
-  const user = await getCurrentUser();
-  if (!user) {
-    return <div className="p-8 text-center text-slate-400">Unauthorized</div>;
-  }
-
+  const user = await requireAuth();
   const sessions = await getActiveSessions(user.id);
 
   return (

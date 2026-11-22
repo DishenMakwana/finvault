@@ -2,7 +2,6 @@
 
 import { prisma } from "@/lib/prisma";
 import {
-  hashPassword,
   comparePassword,
   createSession,
   getCurrentUser,
@@ -12,45 +11,7 @@ import {
 } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-
-export async function registerUser(formData: FormData) {
-  const email = (formData.get("email") as string)?.trim().toLowerCase();
-  const password = formData.get("password") as string;
-  const name = (formData.get("name") as string)?.trim() || null;
-
-  if (!email || !password || password.length < 6) {
-    return {
-      error:
-        "Please provide a valid email and a password of at least 6 characters.",
-    };
-  }
-
-  const existing = await prisma.user.findUnique({ where: { email } });
-  if (existing) {
-    return { error: "An account with this email already exists." };
-  }
-
-  const hashedPassword = await hashPassword(password);
-  const user = await prisma.user.create({
-    data: {
-      email,
-      password: hashedPassword,
-      name,
-    },
-  });
-
-  // Automatically create a default house for the new user
-  await prisma.house.create({
-    data: {
-      userId: user.id,
-      name: "Main House",
-      initialCash: 0,
-    },
-  });
-
-  await createSession(user.id, user.email);
-  redirect("/");
-}
+import { cookies } from "next/headers";
 
 export async function loginUser(formData: FormData) {
   const email = (formData.get("email") as string)?.trim().toLowerCase();
@@ -71,7 +32,22 @@ export async function loginUser(formData: FormData) {
   }
 
   await createSession(user.id, user.email);
-  redirect("/");
+
+  // Look up user's primary owned house
+  const userHouse = await prisma.house.findFirst({
+    where: { userId: user.id, deletedAt: null },
+    orderBy: { createdAt: "asc" },
+  });
+  const defaultHouseId = userHouse ? userHouse.id : "ALL";
+  const cookieStore = await cookies();
+  cookieStore.set("finvault_active_house", String(defaultHouseId), {
+    path: "/",
+    sameSite: "lax",
+    secure: process.env.NODE_ENV === "production",
+    maxAge: 31536000,
+  });
+
+  redirect(`/?houseId=${defaultHouseId}`);
 }
 
 export async function logoutUser() {

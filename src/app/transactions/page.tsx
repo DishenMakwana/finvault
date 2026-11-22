@@ -1,5 +1,4 @@
-import React from "react";
-import { getCurrentUser } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth";
 import { getAllHouses } from "@/lib/actions/house.actions";
 import {
   getTransactions,
@@ -10,6 +9,8 @@ import { FilterBar } from "@/components/transactions/filter-bar";
 import { TransactionTable } from "@/components/transactions/transaction-table";
 import { TransactionActions } from "@/components/transactions/transaction-actions";
 import { formatINR } from "@/lib/formatters";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import { TransactionsPageProps } from "@/types/transactions.types";
 
 export default async function TransactionsPage({
@@ -17,18 +18,35 @@ export default async function TransactionsPage({
 }: TransactionsPageProps) {
   // Parallelize auth, route parameters, and initial houses query
   const [user, resolvedParams, houses] = await Promise.all([
-    getCurrentUser(),
+    requireAuth(),
     searchParams,
     getAllHouses(),
   ]);
 
   const userHome =
     houses.find((h) => h.isOwner || h.userId === user?.id) || houses[0];
-  const defaultHouseId = userHome ? String(userHome.id) : undefined;
+  const defaultHouseId = userHome ? String(userHome.id) : "ALL";
+  const cookieStore = await cookies();
+  const cookieHouseId = cookieStore.get("finvault_active_house")?.value;
   const effectiveHouseId =
     resolvedParams.houseId !== undefined
       ? resolvedParams.houseId
-      : defaultHouseId || "ALL";
+      : cookieHouseId || defaultHouseId;
+
+  if (resolvedParams.houseId === undefined) {
+    const params = new URLSearchParams();
+    params.set("houseId", String(effectiveHouseId));
+    Object.entries(resolvedParams).forEach(([k, v]) => {
+      if (k !== "houseId" && v) {
+        if (Array.isArray(v)) {
+          v.forEach((val) => params.append(k, val));
+        } else {
+          params.set(k, v);
+        }
+      }
+    });
+    redirect(`/transactions?${params.toString()}`);
+  }
 
   // Execute transaction filtering with direct database-level sorting and category lookups in parallel
   const [transactions, categories, inflowCategories, outflowCategories] =
@@ -95,7 +113,12 @@ export default async function TransactionsPage({
         </div>
 
         <TransactionActions
-          houses={houses.map((h) => ({ id: h.id, name: h.name }))}
+          houses={houses.map((h) => ({
+            id: h.id,
+            name: h.name,
+            isOwner: h.isOwner,
+            userId: h.userId,
+          }))}
           inflowCategories={inflowCategories}
           outflowCategories={outflowCategories}
           defaultHouseId={defaultHouseId}

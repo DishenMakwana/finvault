@@ -3,7 +3,6 @@ import { GeistSans } from "geist/font/sans";
 import "./globals.css";
 import { getCurrentUser, getActiveSessions } from "@/lib/auth";
 import { getAllHouses } from "@/lib/actions/house.actions";
-import { getUniqueCategories } from "@/lib/actions/cashflow.actions";
 import { Sidebar } from "@/components/sidebar";
 import { Header } from "@/components/header";
 import { UserStoreProvider } from "@/components/providers/user-store-provider";
@@ -29,14 +28,9 @@ export default async function RootLayout({
   children: React.ReactNode;
 }>) {
   const user = await getCurrentUser();
-  const [houses, activeSessions, inflowCategories, outflowCategories] = user
-    ? await Promise.all([
-        getAllHouses(),
-        getActiveSessions(user.id),
-        getUniqueCategories("INFLOW"),
-        getUniqueCategories("OUTFLOW"),
-      ])
-    : [[], [], [], []];
+  const [houses, activeSessions] = user
+    ? await Promise.all([getAllHouses(), getActiveSessions(user.id)])
+    : [[], []];
 
   return (
     <html lang="en" className={`${GeistSans.variable} dark`}>
@@ -48,6 +42,8 @@ export default async function RootLayout({
               id: h.id,
               name: h.name,
               initialCash: Number(h.initialCash),
+              userId: h.userId,
+              isOwner: h.isOwner,
             }))}
             activeSessionsCount={activeSessions.length}
           >
@@ -57,10 +53,7 @@ export default async function RootLayout({
 
               {/* Main Content Area */}
               <div className="flex-1 flex flex-col pl-64 min-w-0">
-                <Header
-                  inflowCategories={inflowCategories}
-                  outflowCategories={outflowCategories}
-                />
+                <Header />
                 <main className="flex-1 flex flex-col p-6 max-w-7xl w-full mx-auto">
                   {children}
                 </main>

@@ -30,12 +30,15 @@ export interface HouseOption {
   id: number | string;
   name: string;
   initialCash?: any;
+  userId?: number;
+  isOwner?: boolean;
 }
 
 export interface UserState {
   user: UserProfile | null;
   houses: HouseOption[];
   activeHouseId: number | string;
+  userHousePreferences: Record<string, string>;
   activeSessionsCount: number;
   isHydrated: boolean;
 

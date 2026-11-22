@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
   ResponsiveContainer,
@@ -18,15 +18,11 @@ import {
 import {
   Building2,
   TrendingUp,
-  TrendingDown,
-  Layers,
   ArrowUpRight,
   ArrowDownRight,
   PieChart as PieIcon,
   BarChart3,
   Coins,
-  ShieldCheck,
-  CheckCircle2,
 } from "lucide-react";
 import {
   HouseAnalyticsSectionProps,
@@ -89,10 +85,16 @@ export function HouseAnalyticsSection({ data }: HouseAnalyticsSectionProps) {
       );
       return [0, Math.ceil(maxVal * 1.15)];
     }
-    // NET
+    // NET: If no negative values exist, start domain strictly at 0 so bars anchor to the X-axis bottom
     const values = chartData.map((h) => h.netCashFlow);
-    const minVal = Math.min(...values, 0);
+    const hasNegative = values.some((v) => v < 0);
     const maxVal = Math.max(...values, 0);
+
+    if (!hasNegative) {
+      return [0, Math.ceil(Math.max(maxVal * 1.15, 1000))];
+    }
+
+    const minVal = Math.min(...values);
     const pad = Math.max(Math.abs(maxVal - minVal) * 0.15, 1000);
     return [Math.floor(minVal - pad), Math.ceil(maxVal + pad)];
   }, [chartData, metricView]);
@@ -112,12 +114,11 @@ export function HouseAnalyticsSection({ data }: HouseAnalyticsSectionProps) {
 
   if (!houses || houses.length === 0) {
     return (
-      <div className="bg-card border border-border-subtle rounded-2xl p-6 text-center text-neutral-400">
-        <Building2 className="w-8 h-8 text-neutral-500 mx-auto mb-2" />
-        <p className="text-sm font-semibold">No property records available.</p>
+      <div className="bg-card border border-border-subtle rounded-2xl p-6 flex flex-col items-center justify-center text-neutral-400 h-64">
+        <p className="text-sm">No records found.</p>
         <p className="text-xs text-neutral-500 mt-1">
-          Add properties and record cash inflows or outflows to generate house
-          analytics.
+          Use &quot;+ Add Inflow&quot; or &quot;- Add Outflow&quot; above to
+          start logging.
         </p>
       </div>
     );
@@ -603,7 +604,16 @@ export function HouseAnalyticsSection({ data }: HouseAnalyticsSectionProps) {
               {houses.map((h) => (
                 <div
                   key={h.id}
-                  className="flex items-center justify-between p-2 rounded-lg bg-surface/60 border border-border-muted hover:border-border-contrast transition-colors text-xs"
+                  onClick={() =>
+                    setActivePropertyId((prev) =>
+                      prev === h.id ? "ALL" : h.id
+                    )
+                  }
+                  className={`flex items-center justify-between p-2 rounded-lg bg-surface/60 border transition-colors text-xs cursor-pointer ${
+                    activePropertyId === h.id
+                      ? "border-primary bg-primary/10 shadow-sm"
+                      : "border-border-muted hover:border-border-contrast"
+                  }`}
                 >
                   <div className="flex items-center gap-2">
                     <span

@@ -1,29 +1,25 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser, requireAuth } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import { LoanStatus } from "@prisma/client";
 import { cacheGet, cacheSet, cacheInvalidateTag } from "@/lib/cache";
+import { resolveTargetHouseIds } from "@/lib/house-query";
 
 export async function getLoans(houseId?: number | string) {
   const user = await getCurrentUser();
   if (!user) return [];
 
-  const cacheKey = `loans:${user.id}:${houseId || "all"}`;
+  const { targetIds, cacheKeySegment } = await resolveTargetHouseIds(houseId);
+  const cacheKey = `loans:${user.id}:${cacheKeySegment}`;
   const cached = cacheGet<any[]>(cacheKey);
   if (cached) return cached;
 
   const whereClause: any = {
     deletedAt: null,
+    houseId: { in: targetIds },
   };
-
-  if (houseId && houseId !== "ALL") {
-    const hId = typeof houseId === "number" ? houseId : parseInt(houseId, 10);
-    if (!isNaN(hId)) {
-      whereClause.houseId = hId;
-    }
-  }
 
   const loans = await prisma.loan.findMany({
     where: whereClause,
@@ -73,8 +69,7 @@ export async function getLoans(houseId?: number | string) {
 }
 
 export async function addLoanAction(formData: FormData) {
-  const user = await getCurrentUser();
-  if (!user) return { error: "Unauthorized" };
+  const user = await requireAuth();
 
   const relativeName = (formData.get("relativeName") as string)?.trim();
   const totalAmountStr = formData.get("totalAmount") as string;
@@ -121,8 +116,7 @@ export async function addLoanAction(formData: FormData) {
 }
 
 export async function recordRepaymentAction(formData: FormData) {
-  const user = await getCurrentUser();
-  if (!user) return { error: "Unauthorized" };
+  const user = await requireAuth();
 
   const loanIdStr = formData.get("loanId") as string;
   const loanId = parseInt(loanIdStr, 10);
@@ -207,9 +201,8 @@ export async function recordRepaymentAction(formData: FormData) {
   return { success: true };
 }
 
-async function deleteLoanAction(id: number | string) {
-  const user = await getCurrentUser();
-  if (!user) return { error: "Unauthorized" };
+export async function deleteLoanAction(id: number | string) {
+  const user = await requireAuth();
 
   const loanId = typeof id === "number" ? id : parseInt(id, 10);
   await prisma.loan.updateMany({

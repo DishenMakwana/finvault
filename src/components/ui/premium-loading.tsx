@@ -1,6 +1,5 @@
 "use client";
 
-import React from "react";
 import { motion } from "framer-motion";
 import {
   PremiumLoadingProps,
@@ -31,6 +30,26 @@ const THEME_STYLES: Record<
     pingDot: "bg-teal-200",
     titleColor: "text-teal-400",
   },
+  emerald: {
+    aura: "bg-emerald-500/25",
+    outerRing: "border-emerald-500/30",
+    midArc: "border-t-emerald-400 border-r-emerald-500",
+    innerArc: "border-b-emerald-300",
+    coreOrb: "from-emerald-400 via-emerald-500 to-emerald-700",
+    glowShadow: "shadow-[0_0_20px_rgba(16,185,129,0.55)]",
+    pingDot: "bg-emerald-200",
+    titleColor: "text-emerald-400",
+  },
+  cyan: {
+    aura: "bg-cyan-500/25",
+    outerRing: "border-cyan-500/30",
+    midArc: "border-t-cyan-400 border-r-cyan-500",
+    innerArc: "border-b-cyan-300",
+    coreOrb: "from-cyan-400 via-cyan-500 to-cyan-700",
+    glowShadow: "shadow-[0_0_20px_rgba(6,182,212,0.55)]",
+    pingDot: "bg-cyan-200",
+    titleColor: "text-cyan-400",
+  },
   blue: {
     aura: "bg-blue-500/25",
     outerRing: "border-blue-500/30",
@@ -40,6 +59,16 @@ const THEME_STYLES: Record<
     glowShadow: "shadow-[0_0_20px_rgba(59,130,246,0.55)]",
     pingDot: "bg-blue-200",
     titleColor: "text-blue-400",
+  },
+  indigo: {
+    aura: "bg-indigo-500/25",
+    outerRing: "border-indigo-500/30",
+    midArc: "border-t-indigo-400 border-r-indigo-500",
+    innerArc: "border-b-indigo-300",
+    coreOrb: "from-indigo-400 via-indigo-500 to-indigo-700",
+    glowShadow: "shadow-[0_0_20px_rgba(99,102,241,0.55)]",
+    pingDot: "bg-indigo-200",
+    titleColor: "text-indigo-400",
   },
   purple: {
     aura: "bg-purple-500/25",

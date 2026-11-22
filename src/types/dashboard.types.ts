@@ -34,7 +34,12 @@ export interface KpiCardProps {
 export interface QuickModalProps {
   isOpen: boolean;
   onClose: () => void;
-  houses: { id: number | string; name: string }[];
+  houses: {
+    id: number | string;
+    name: string;
+    isOwner?: boolean;
+    userId?: number;
+  }[];
   defaultHouseId?: number | string;
   categories?: string[];
 }
@@ -74,4 +79,16 @@ interface RecentFeedTransactionItem {
 
 export interface RecentFeedProps {
   transactions: RecentFeedTransactionItem[];
+}
+
+export interface CategoryBreakdownItem {
+  category: string;
+  count: number;
+  total: number;
+  type: "INFLOW" | "OUTFLOW";
+}
+
+export interface CategoryBreakdownCardProps {
+  categories: CategoryBreakdownItem[];
+  netFlow: number;
 }

@@ -1,10 +1,38 @@
-import React from "react";
-import { getHousesWithBalances } from "@/lib/actions/house.actions";
+import { requireAuth } from "@/lib/auth";
+import {
+  getHousesWithBalances,
+  getAllHouses,
+} from "@/lib/actions/house.actions";
 import { HouseList } from "@/components/houses/house-list";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 
-export default async function HousesPage() {
+export default async function HousesPage({
+  searchParams,
+}: {
+  searchParams?: Promise<{ houseId?: string }>;
+}) {
+  const [user, resolvedParams, allHouses] = await Promise.all([
+    requireAuth(),
+    searchParams ? await searchParams : {},
+    getAllHouses(),
+  ]);
+  const userHome =
+    allHouses.find((h) => h.isOwner || h.userId === user?.id) || allHouses[0];
+  const defaultHouseId = userHome ? String(userHome.id) : "ALL";
+  const cookieStore = await cookies();
+  const cookieHouseId = cookieStore.get("finvault_active_house")?.value;
+  const currentHouseId =
+    resolvedParams.houseId !== undefined
+      ? resolvedParams.houseId
+      : cookieHouseId || defaultHouseId;
+
+  if (resolvedParams.houseId === undefined) {
+    redirect(`/houses?houseId=${currentHouseId}`);
+  }
+
   const { houses, totalCurrentCash, totalInitialCash } =
-    await getHousesWithBalances();
+    await getHousesWithBalances(currentHouseId);
 
   return (
     <div className="space-y-6">

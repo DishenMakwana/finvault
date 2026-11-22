@@ -1,4 +1,4 @@
-import React from "react";
+import { requireAuth } from "@/lib/auth";
 import { getAllHouses } from "@/lib/actions/house.actions";
 import {
   getCashflowAnalytics,
@@ -11,6 +11,8 @@ import { CategoryBarChart } from "@/components/analytics/category-bar-chart";
 import { HouseAnalyticsSection } from "@/components/analytics/house-analytics-section";
 import { RentalIncomeSection } from "@/components/analytics/rental-income-section";
 import { formatINR } from "@/lib/formatters";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import {
   AnalyticsDatePreset,
   AnalyticsViewMode,
@@ -20,8 +22,36 @@ import {
 export default async function AnalyticsPage({
   searchParams,
 }: AnalyticsPageProps) {
-  const resolvedParams = await searchParams;
-  const currentHouseId = resolvedParams.houseId || "ALL";
+  const [user, resolvedParams, houses] = await Promise.all([
+    requireAuth(),
+    searchParams,
+    getAllHouses(),
+  ]);
+  const userHome =
+    houses.find((h) => h.isOwner || h.userId === user?.id) || houses[0];
+  const defaultHouseId = userHome ? String(userHome.id) : "ALL";
+  const cookieStore = await cookies();
+  const cookieHouseId = cookieStore.get("finvault_active_house")?.value;
+  const currentHouseId =
+    resolvedParams.houseId !== undefined
+      ? resolvedParams.houseId
+      : cookieHouseId || defaultHouseId;
+
+  if (resolvedParams.houseId === undefined) {
+    const params = new URLSearchParams();
+    params.set("houseId", String(currentHouseId));
+    if (resolvedParams.range) params.set("range", resolvedParams.range);
+    if (resolvedParams.startDate)
+      params.set("startDate", resolvedParams.startDate);
+    if (resolvedParams.endDate) params.set("endDate", resolvedParams.endDate);
+    if (resolvedParams.mode) params.set("mode", resolvedParams.mode);
+    if (resolvedParams.rentalYear)
+      params.set("rentalYear", resolvedParams.rentalYear);
+    if (resolvedParams.rentalView)
+      params.set("rentalView", resolvedParams.rentalView);
+    redirect(`/analytics?${params.toString()}`);
+  }
+
   const currentRange = (resolvedParams.range as AnalyticsDatePreset) || "1Y";
   const currentStartDate = resolvedParams.startDate;
   const currentEndDate = resolvedParams.endDate;
@@ -39,24 +69,28 @@ export default async function AnalyticsPage({
         : "TIMELINE";
 
   // Run all independent queries in parallel
-  const [houses, houseAnalytics, analyticsData, rentalAnalytics] =
-    await Promise.all([
-      getAllHouses(),
-      getHouseAnalyticsData(),
-      getCashflowAnalytics({
-        houseId: currentHouseId,
-        range: currentRange,
-        startDate: currentStartDate,
-        endDate: currentEndDate,
-        mode: currentMode,
-      }),
-      getRentalIncomeAnalyticsData(rentalYear),
-    ]);
+  const [houseAnalytics, analyticsData, rentalAnalytics] = await Promise.all([
+    getHouseAnalyticsData(currentHouseId),
+    getCashflowAnalytics({
+      houseId: currentHouseId,
+      range: currentRange,
+      startDate: currentStartDate,
+      endDate: currentEndDate,
+      mode: currentMode,
+    }),
+    getRentalIncomeAnalyticsData(rentalYear, currentHouseId),
+  ]);
 
   const { summary } = analyticsData;
   const totalFlow = summary.totalInflow + summary.totalOutflow;
   const inflowRatio =
     totalFlow > 0 ? ((summary.totalInflow / totalFlow) * 100).toFixed(1) : "0";
+
+  const hasNoData =
+    summary.inflowTransactionCount === 0 &&
+    summary.outflowTransactionCount === 0 &&
+    summary.totalInflow === 0 &&
+    summary.totalOutflow === 0;
 
   return (
     <div className="space-y-6">
@@ -71,99 +105,118 @@ export default async function AnalyticsPage({
         </p>
       </div>
 
-      {/* KPI Cards Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Card 1: Total Inflow */}
-        <KpiCard
-          index={0}
-          label="Total Inflow"
-          value={formatINR(summary.totalInflow)}
-          iconName="inflow"
-          iconColor="text-primary"
-          iconBg="bg-primary/10"
-          iconBorder="border-primary/30"
-          deltaText={`${inflowRatio}% of Flow`}
-          deltaType="positive"
-          subtext={`${summary.inflowTransactionCount} Inflow Transactions`}
-        />
+      {hasNoData ? (
+        <div className="bg-card border border-border-subtle rounded-2xl p-12 flex flex-col items-center justify-center text-neutral-400 min-h-[360px] text-center shadow-xl">
+          <p className="text-sm font-medium text-neutral-300">
+            No records found.
+          </p>
+          <p className="text-xs text-neutral-500 mt-1">
+            Use &quot;+ Add Inflow&quot; or &quot;- Add Outflow&quot; above to
+            start logging.
+          </p>
+        </div>
+      ) : (
+        <>
+          {/* KPI Cards Row */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* Card 1: Total Inflow */}
+            <KpiCard
+              index={0}
+              label="Total Inflow"
+              value={formatINR(summary.totalInflow)}
+              iconName="inflow"
+              iconColor="text-primary"
+              iconBg="bg-primary/10"
+              iconBorder="border-primary/30"
+              deltaText={`${inflowRatio}% of Flow`}
+              deltaType="positive"
+              subtext={`${summary.inflowTransactionCount} Inflow Transactions`}
+            />
 
-        {/* Card 2: Total Outflow */}
-        <KpiCard
-          index={1}
-          label="Total Outflow"
-          value={formatINR(summary.totalOutflow)}
-          iconName="outflow"
-          iconColor="text-rose-400"
-          iconBg="bg-rose-500/10"
-          iconBorder="border-rose-500/30"
-          deltaText="Expenditure"
-          deltaType="negative"
-          subtext={`${summary.outflowTransactionCount} Outflow Transactions`}
-        />
+            {/* Card 2: Total Outflow */}
+            <KpiCard
+              index={1}
+              label="Total Outflow"
+              value={formatINR(summary.totalOutflow)}
+              iconName="outflow"
+              iconColor="text-rose-400"
+              iconBg="bg-rose-500/10"
+              iconBorder="border-rose-500/30"
+              deltaText="Expenditure"
+              deltaType="negative"
+              subtext={`${summary.outflowTransactionCount} Outflow Transactions`}
+            />
 
-        {/* Card 3: Net Cash Flow */}
-        <KpiCard
-          index={2}
-          label="Net Cash Position"
-          value={`${summary.netCashFlow >= 0 ? "+" : ""}${formatINR(summary.netCashFlow)}`}
-          iconName="cash"
-          iconColor={
-            summary.netCashFlow >= 0 ? "text-primary" : "text-rose-400"
-          }
-          iconBg={summary.netCashFlow >= 0 ? "bg-primary/10" : "bg-rose-500/10"}
-          iconBorder={
-            summary.netCashFlow >= 0
-              ? "border-primary/30"
-              : "border-rose-500/30"
-          }
-          deltaText={summary.netCashFlow >= 0 ? "Net Surplus" : "Net Deficit"}
-          deltaType={summary.netCashFlow >= 0 ? "positive" : "negative"}
-          subtext="Inflow vs Outflow Margin"
-        />
+            {/* Card 3: Net Cash Flow */}
+            <KpiCard
+              index={2}
+              label="Net Cash Position"
+              value={`${summary.netCashFlow >= 0 ? "+" : ""}${formatINR(summary.netCashFlow)}`}
+              iconName="cash"
+              iconColor={
+                summary.netCashFlow >= 0 ? "text-primary" : "text-rose-400"
+              }
+              iconBg={
+                summary.netCashFlow >= 0 ? "bg-primary/10" : "bg-rose-500/10"
+              }
+              iconBorder={
+                summary.netCashFlow >= 0
+                  ? "border-primary/30"
+                  : "border-rose-500/30"
+              }
+              deltaText={
+                summary.netCashFlow >= 0 ? "Net Surplus" : "Net Deficit"
+              }
+              deltaType={summary.netCashFlow >= 0 ? "positive" : "negative"}
+              subtext="Inflow vs Outflow Margin"
+            />
 
-        {/* Card 4: Data Points & Range */}
-        <KpiCard
-          index={3}
-          label="Active Window"
-          value={`${summary.dataPointCount} Points`}
-          iconName="sessions"
-          iconColor="text-indigo-400"
-          iconBg="bg-indigo-500/10"
-          iconBorder="border-indigo-500/30"
-          deltaText={currentRange}
-          deltaType="neutral"
-          subtext={`${summary.startDate} to ${summary.endDate}`}
-        />
-      </div>
+            {/* Card 4: Data Points & Range */}
+            <KpiCard
+              index={3}
+              label="Active Window"
+              value={`${summary.dataPointCount} Points`}
+              iconName="sessions"
+              iconColor="text-indigo-400"
+              iconBg="bg-indigo-500/10"
+              iconBorder="border-indigo-500/30"
+              deltaText={currentRange}
+              deltaType="neutral"
+              subtext={`${summary.startDate} to ${summary.endDate}`}
+            />
+          </div>
 
-      {/* Main Interactive Trend Chart Section */}
-      <CashflowAnalyticsChart
-        initialData={analyticsData}
-        houses={houses.map((h) => ({ id: h.id, name: h.name }))}
-        currentHouseId={currentHouseId}
-        currentRange={currentRange}
-        currentStartDate={currentStartDate}
-        currentEndDate={currentEndDate}
-        currentMode={currentMode}
-      />
+          {/* Main Interactive Trend Chart Section */}
+          <CashflowAnalyticsChart
+            initialData={analyticsData}
+            houses={houses.map((h) => ({ id: h.id, name: h.name }))}
+            currentHouseId={currentHouseId}
+            currentRange={currentRange}
+            currentStartDate={currentStartDate}
+            currentEndDate={currentEndDate}
+            currentMode={currentMode}
+          />
 
-      {/* In-Depth Category Distribution & Benchmark Bar Chart */}
-      <CategoryBarChart
-        inflowCategories={analyticsData.categories.inflow}
-        outflowCategories={analyticsData.categories.outflow}
-        combinedCategories={analyticsData.categories.combined}
-        defaultType="COMBINED"
-      />
+          {/* In-Depth Category Distribution & Benchmark Bar Chart */}
+          <CategoryBarChart
+            inflowCategories={analyticsData.categories.inflow}
+            outflowCategories={analyticsData.categories.outflow}
+            combinedCategories={analyticsData.categories.combined}
+            defaultType="COMBINED"
+          />
 
-      {/* Multi-Property & House Financial Intelligence Dashboard */}
-      <HouseAnalyticsSection data={houseAnalytics} />
+          {/* Multi-Property & House Financial Intelligence Dashboard */}
+          <HouseAnalyticsSection data={houseAnalytics} />
 
-      {/* Yearly Rental Income & Occupancy Matrix */}
-      <RentalIncomeSection
-        data={rentalAnalytics}
-        selectedYear={rentalYear}
-        initialViewMode={rentalView}
-      />
+          {/* Yearly Rental Income & Occupancy Matrix */}
+          <RentalIncomeSection
+            data={rentalAnalytics}
+            selectedYear={rentalYear}
+            initialViewMode={rentalView}
+            currentHouseId={currentHouseId}
+          />
+        </>
+      )}
     </div>
   );
 }

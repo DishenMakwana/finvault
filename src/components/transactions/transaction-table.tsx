@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useMemo, useState, useDeferredValue } from "react";
+import { useMemo, useState, useDeferredValue } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import {
   Trash2,

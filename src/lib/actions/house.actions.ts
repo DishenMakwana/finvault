@@ -1,27 +1,10 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser, requireAuth } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import { cacheGet, cacheSet, cacheInvalidateTag } from "@/lib/cache";
-
-async function getUserHouses() {
-  const user = await getCurrentUser();
-  if (!user) return [];
-
-  const houses = await prisma.house.findMany({
-    where: {
-      userId: user.id,
-      deletedAt: null,
-    },
-    orderBy: { createdAt: "asc" },
-  });
-
-  return houses.map((h) => ({
-    ...h,
-    initialCash: Number(h.initialCash),
-  }));
-}
+import { resolveTargetHouseIds } from "@/lib/house-query";
 
 export async function getAllHouses() {
   const user = await getCurrentUser();
@@ -76,7 +59,7 @@ export async function getAllHouses() {
   }));
 }
 
-export async function getHousesWithBalances() {
+export async function getHousesWithBalances(selectedHouseId?: string | number) {
   const user = await getCurrentUser();
   if (!user) {
     return {
@@ -86,13 +69,15 @@ export async function getHousesWithBalances() {
     };
   }
 
-  const cacheKey = `houses:balances:${user.id}`;
+  const { targetIds, cacheKeySegment } =
+    await resolveTargetHouseIds(selectedHouseId);
+  const cacheKey = `houses:balances:${user.id}:${cacheKeySegment}`;
   const cached = cacheGet<any>(cacheKey);
   if (cached) return cached;
 
   const [houses, transactions, loans] = await Promise.all([
     prisma.house.findMany({
-      where: { deletedAt: null },
+      where: { deletedAt: null, id: { in: targetIds } },
       include: {
         user: {
           select: {
@@ -105,7 +90,7 @@ export async function getHousesWithBalances() {
       orderBy: { createdAt: "asc" },
     }),
     prisma.transaction.findMany({
-      where: { deletedAt: null },
+      where: { deletedAt: null, houseId: { in: targetIds } },
       select: {
         houseId: true,
         type: true,
@@ -113,7 +98,7 @@ export async function getHousesWithBalances() {
       },
     }),
     prisma.loan.findMany({
-      where: { deletedAt: null },
+      where: { deletedAt: null, houseId: { in: targetIds } },
       select: {
         houseId: true,
         totalAmount: true,
@@ -208,8 +193,7 @@ export async function getHousesWithBalances() {
 }
 
 export async function createHouseAction(formData: FormData) {
-  const user = await getCurrentUser();
-  if (!user) return { error: "Unauthorized" };
+  const user = await requireAuth();
 
   const name = (formData.get("name") as string)?.trim();
   const address = (formData.get("address") as string)?.trim() || null;
@@ -241,9 +225,8 @@ export async function createHouseAction(formData: FormData) {
   return { success: true };
 }
 
-async function updateInitialCashAction(formData: FormData) {
-  const user = await getCurrentUser();
-  if (!user) return { error: "Unauthorized" };
+export async function updateInitialCashAction(formData: FormData) {
+  const user = await requireAuth();
 
   const houseIdStr = formData.get("houseId") as string;
   const houseId = parseInt(houseIdStr, 10);
@@ -276,9 +259,8 @@ async function updateInitialCashAction(formData: FormData) {
   return { success: true };
 }
 
-async function deleteHouseAction(houseId: number | string) {
-  const user = await getCurrentUser();
-  if (!user) return { error: "Unauthorized" };
+export async function deleteHouseAction(houseId: number | string) {
+  const user = await requireAuth();
 
   const id = typeof houseId === "number" ? houseId : parseInt(houseId, 10);
 

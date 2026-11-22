@@ -7,7 +7,7 @@ export async function GET(req: NextRequest) {
   try {
     const user = await getCurrentUser();
     if (!user) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.redirect(new URL("/login", req.url));
     }
 
     const { searchParams } = new URL(req.url);
@@ -16,14 +16,10 @@ export async function GET(req: NextRequest) {
 
     const currentYear = new Date().getFullYear();
     const year = yearParam ? parseInt(yearParam, 10) : currentYear;
-    const houseId =
-      houseIdParam && houseIdParam !== "ALL"
-        ? parseInt(houseIdParam, 10)
-        : undefined;
 
     const data = await getRentalIncomeAnalyticsData(
       year,
-      isNaN(houseId as number) ? undefined : houseId
+      houseIdParam || undefined
     );
 
     const excelBuffer = await generateRentalIncomeExcel(data, year);

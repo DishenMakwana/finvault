@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import { useEffect } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import {
@@ -18,8 +18,6 @@ export function Header({
   houses,
   activeSessionsCount,
   currentHouseId,
-  inflowCategories,
-  outflowCategories,
 }: HeaderProps = {}) {
   const router = useRouter();
   const pathname = usePathname();
@@ -39,6 +37,23 @@ export function Header({
   const selectedHouseId =
     urlHouseId ||
     (currentHouseId !== undefined ? currentHouseId : storeActiveHouseId);
+
+  // Keep selected house in URL params so relative data across pages renders properly
+  useEffect(() => {
+    const urlHouse = searchParams.get("houseId");
+    if (urlHouse && urlHouse !== storeActiveHouseId) {
+      setActiveHouseId(urlHouse);
+    } else if (
+      !urlHouse &&
+      storeActiveHouseId &&
+      pathname !== "/settings" &&
+      pathname !== "/login"
+    ) {
+      const params = new URLSearchParams(searchParams.toString());
+      params.set("houseId", String(storeActiveHouseId));
+      router.replace(`${pathname}?${params.toString()}`);
+    }
+  }, [pathname, searchParams, storeActiveHouseId, setActiveHouseId, router]);
 
   const getPageInfo = () => {
     if (pathname.startsWith("/transactions")) {
@@ -78,11 +93,7 @@ export function Header({
               onChange={(val) => {
                 setActiveHouseId(val);
                 const params = new URLSearchParams(searchParams.toString());
-                if (val === "ALL") {
-                  params.delete("houseId");
-                } else {
-                  params.set("houseId", val);
-                }
+                params.set("houseId", String(val));
                 router.push(`${pathname}?${params.toString()}`);
               }}
               icon={Home}

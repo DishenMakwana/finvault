@@ -1,9 +1,8 @@
 "use client";
 
-import React, { useState } from "react";
+import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  UserCheck,
   Calendar,
   ChevronDown,
   ChevronUp,
@@ -11,13 +10,12 @@ import {
   CheckCircle2,
   Clock,
   AlertCircle,
-  Home,
 } from "lucide-react";
 import { RepaymentModal } from "./repayment-modal";
 import { formatINR, formatDate } from "@/lib/formatters";
 import { LoanCardProps } from "@/types/loans.types";
 
-export function LoanCard({ loan, houses }: LoanCardProps) {
+export function LoanCard({ loan, houses, index = 0 }: LoanCardProps) {
   const [isRepayOpen, setIsRepayOpen] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
 
@@ -62,7 +60,14 @@ export function LoanCard({ loan, houses }: LoanCardProps) {
   return (
     <>
       <motion.div
-        whileHover={{ y: -2 }}
+        initial={{ opacity: 0, y: 14 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{
+          duration: 0.35,
+          delay: 0.12 + index * 0.04,
+          ease: "easeOut",
+        }}
+        whileHover={{ y: -3 }}
         className="bg-card border border-border-subtle hover:border-border-hover rounded-2xl p-6 shadow-xl transition-all"
       >
         {/* Header: Relative Name & Status */}

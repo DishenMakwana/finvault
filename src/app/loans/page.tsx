@@ -1,20 +1,35 @@
-import React from "react";
+import { requireAuth } from "@/lib/auth";
 import { getLoans } from "@/lib/actions/loan.actions";
 import { getAllHouses } from "@/lib/actions/house.actions";
 import { LoanCard } from "@/components/loans/loan-card";
 import { KpiCard } from "@/components/dashboard/kpi-card";
 import { LoanActions } from "@/components/loans/loan-actions";
 import { formatINR } from "@/lib/formatters";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import { LoansPageProps } from "@/types/loans.types";
 
 export default async function LoansPage({ searchParams }: LoansPageProps) {
-  const resolvedParams = await searchParams;
-  const houseId = resolvedParams.houseId;
-
-  const [houses, loans] = await Promise.all([
+  const [user, resolvedParams, houses] = await Promise.all([
+    requireAuth(),
+    searchParams,
     getAllHouses(),
-    getLoans(houseId),
   ]);
+  const userHome =
+    houses.find((h) => h.isOwner || h.userId === user?.id) || houses[0];
+  const defaultHouseId = userHome ? String(userHome.id) : "ALL";
+  const cookieStore = await cookies();
+  const cookieHouseId = cookieStore.get("finvault_active_house")?.value;
+  const houseId =
+    resolvedParams.houseId !== undefined
+      ? resolvedParams.houseId
+      : cookieHouseId || defaultHouseId;
+
+  if (resolvedParams.houseId === undefined) {
+    redirect(`/loans?houseId=${houseId}`);
+  }
+
+  const loans = await getLoans(houseId);
 
   // Summary Metrics
   const totalLent = loans.reduce((acc, l) => acc + Number(l.totalAmount), 0);
@@ -39,7 +54,14 @@ export default async function LoansPage({ searchParams }: LoansPageProps) {
           </p>
         </div>
 
-        <LoanActions houses={houses.map((h) => ({ id: h.id, name: h.name }))} />
+        <LoanActions
+          houses={houses.map((h) => ({
+            id: h.id,
+            name: h.name,
+            isOwner: h.isOwner,
+            userId: h.userId,
+          }))}
+        />
       </div>
 
       {/* KPI Cards */}
@@ -122,9 +144,10 @@ export default async function LoansPage({ searchParams }: LoansPageProps) {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {loans.map((loan) => (
+            {loans.map((loan, idx) => (
               <LoanCard
                 key={loan.id}
+                index={idx}
                 loan={loan}
                 houses={houses.map((h) => ({ id: h.id, name: h.name }))}
               />

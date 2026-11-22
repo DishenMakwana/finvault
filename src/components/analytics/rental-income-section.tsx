@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useTransition, useEffect } from "react";
+import { useState, useTransition, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
   KeyRound,
@@ -36,6 +36,7 @@ export function RentalIncomeSection({
   data: initialData,
   selectedYear: initialYear,
   initialViewMode = "TIMELINE",
+  currentHouseId,
 }: RentalIncomeSectionProps) {
   const pathname = usePathname();
   const [isPending, startTransition] = useTransition();
@@ -79,7 +80,10 @@ export function RentalIncomeSection({
   const handleDownloadExcel = async () => {
     try {
       setIsDownloading(true);
-      const res = await fetch(`/api/export/rental-income?year=${activeYear}`);
+      const houseParam = currentHouseId ? `&houseId=${currentHouseId}` : "";
+      const res = await fetch(
+        `/api/export/rental-income?year=${activeYear}${houseParam}`
+      );
       if (!res.ok) throw new Error("Export failed");
       const blob = await res.blob();
       const url = window.URL.createObjectURL(blob);
@@ -132,7 +136,10 @@ export function RentalIncomeSection({
 
     startTransition(async () => {
       try {
-        const updated = await getRentalIncomeAnalyticsData(year);
+        const updated = await getRentalIncomeAnalyticsData(
+          year,
+          currentHouseId
+        );
         setSummaryData(updated);
       } catch (err) {
         console.error("Failed to load rental data for year:", err);
@@ -153,7 +160,10 @@ export function RentalIncomeSection({
         isVacant,
       });
       // In-place update without page refresh
-      const updated = await getRentalIncomeAnalyticsData(activeYear);
+      const updated = await getRentalIncomeAnalyticsData(
+        activeYear,
+        currentHouseId
+      );
       setSummaryData(updated);
       setInspectCell(null);
     } catch (e) {

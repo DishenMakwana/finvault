@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useEffect, useTransition } from "react";
-import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import { useState, useEffect, useTransition } from "react";
+import { usePathname, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
 import {
   AreaChart,
@@ -27,7 +27,6 @@ export function CashflowChart({
   currentHouseId = "ALL",
   initialTimeframe = "1Y",
 }: CashflowChartProps) {
-  const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
@@ -44,10 +43,10 @@ export function CashflowChart({
 
   // Synchronize when initialData or currentHouseId changes from parent
   useEffect(() => {
-    if (initialData && initialData.length > 0) {
+    if (initialData !== undefined) {
       setChartData(initialData);
     }
-  }, [initialData]);
+  }, [initialData, currentHouseId]);
 
   // When timeframe or houseId changes, fetch the exact trend dataset
   const handleTimeframeChange = (tf: CashflowTimeframe) => {

@@ -1,37 +1,53 @@
-import React from "react";
-import { getCurrentUser } from "@/lib/auth";
+import { requireAuth } from "@/lib/auth";
+import { getAllHouses } from "@/lib/actions/house.actions";
 import { getDashboardSummary } from "@/lib/actions/cashflow.actions";
 import { getUserActiveSessions } from "@/lib/actions/auth.actions";
 import { KpiCard } from "@/components/dashboard/kpi-card";
 import { CashflowChart } from "@/components/dashboard/cashflow-chart";
 import { RecentFeed } from "@/components/dashboard/recent-feed";
+import { CategoryBreakdownCard } from "@/components/dashboard/category-breakdown-card";
 import { Clock } from "lucide-react";
-import { formatINR, formatDate } from "@/lib/formatters";
-import Link from "next/link";
+import { formatINR } from "@/lib/formatters";
+import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { DashboardPageProps, CashflowTimeframe } from "@/types/dashboard.types";
 
 export default async function DashboardPage({
   searchParams,
 }: DashboardPageProps) {
-  const [user, resolvedParams] = await Promise.all([
-    getCurrentUser(),
+  const [user, resolvedParams, houses] = await Promise.all([
+    requireAuth(),
     searchParams,
+    getAllHouses(),
   ]);
-  const currentHouseId = resolvedParams.houseId || "ALL";
+  const userHome =
+    houses.find((h) => h.isOwner || h.userId === user?.id) || houses[0];
+  const defaultHouseId = userHome ? String(userHome.id) : "ALL";
+  const cookieStore = await cookies();
+  const cookieHouseId = cookieStore.get("finvault_active_house")?.value;
+  const currentHouseId =
+    resolvedParams.houseId !== undefined
+      ? resolvedParams.houseId
+      : cookieHouseId || defaultHouseId;
   const currentTimeframe =
     (resolvedParams.timeframe as CashflowTimeframe) || "1Y";
 
+  if (resolvedParams.houseId === undefined) {
+    const params = new URLSearchParams();
+    params.set("houseId", String(currentHouseId));
+    if (resolvedParams.timeframe) {
+      params.set("timeframe", resolvedParams.timeframe);
+    }
+    redirect(`/?${params.toString()}`);
+  }
+
   const [summary, activeSessions] = await Promise.all([
     getDashboardSummary(currentHouseId, currentTimeframe),
-    user ? getUserActiveSessions() : Promise.resolve([]),
+    getUserActiveSessions(),
   ]);
 
   if (!summary) {
-    return (
-      <div className="p-8 text-center text-slate-400">
-        <p>Please log in to view your financial vault.</p>
-      </div>
-    );
+    redirect("/login");
   }
 
   const {
@@ -168,66 +184,7 @@ export default async function DashboardPage({
         </div>
 
         {/* Category Breakdown Panel */}
-        <div className="bg-card border border-border-subtle rounded-2xl p-6 shadow-lg flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between mb-3">
-              <h4 className="text-sm font-bold text-white tracking-tight">
-                Category Breakdown
-              </h4>
-              <span className="text-[11px] text-neutral-500">
-                Top 5 by Value
-              </span>
-            </div>
-
-            <div className="space-y-2.5 max-h-56 overflow-y-auto pr-1">
-              {topCategories.length === 0 ? (
-                <p className="text-xs text-neutral-500 py-6 text-center">
-                  No categories recorded yet.
-                </p>
-              ) : (
-                topCategories.map((cat) => (
-                  <div
-                    key={cat.category}
-                    className="flex items-center justify-between p-2 rounded-xl bg-surface border border-border-muted"
-                  >
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={`w-2 h-2 rounded-full ${
-                          cat.type === "INFLOW" ? "bg-primary" : "bg-danger"
-                        }`}
-                      />
-                      <span className="text-xs font-semibold text-white capitalize">
-                        {cat.category}
-                      </span>
-                      <span className="text-[10px] text-neutral-500">
-                        ({cat.count})
-                      </span>
-                    </div>
-                    <span
-                      className={`text-xs font-mono font-bold ${
-                        cat.type === "INFLOW" ? "text-primary" : "text-danger"
-                      }`}
-                    >
-                      {formatINR(cat.total)}
-                    </span>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-
-          <div className="pt-4 border-t border-border-subtle mt-4 flex items-center justify-between text-xs">
-            <span className="text-neutral-400">Net Flow (In - Out):</span>
-            <span
-              className={`font-mono font-bold text-sm ${
-                netFlow >= 0 ? "text-primary" : "text-danger"
-              }`}
-            >
-              {netFlow >= 0 ? "+" : ""}
-              {formatINR(netFlow)}
-            </span>
-          </div>
-        </div>
+        <CategoryBreakdownCard categories={topCategories} netFlow={netFlow} />
       </div>
 
       {/* Row 3: Recent Activity Stream */}

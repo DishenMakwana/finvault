@@ -61,7 +61,12 @@ export interface FilterBarProps {
 }
 
 export interface TransactionActionsProps {
-  houses: { id: number | string; name: string }[];
+  houses: {
+    id: number | string;
+    name: string;
+    isOwner?: boolean;
+    userId?: number;
+  }[];
   inflowCategories?: string[];
   outflowCategories?: string[];
   defaultHouseId?: string | number;

@@ -2,7 +2,7 @@
 
 import ExcelJS from "exceljs";
 import { prisma } from "@/lib/prisma";
-import { getCurrentUser } from "@/lib/auth";
+import { getCurrentUser, requireAuth } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import { TransactionType } from "@prisma/client";
 import { cacheGet, cacheSet, cacheInvalidateTag } from "@/lib/cache";
@@ -17,6 +17,7 @@ import {
   CashflowChartDataPoint,
   CashflowTimeframe,
 } from "@/types/dashboard.types";
+import { resolveTargetHouseIds } from "@/lib/house-query";
 
 function invalidateCashflowCaches() {
   cacheInvalidateTag("categories");
@@ -113,8 +114,7 @@ export async function getUniqueCategories(
 }
 
 export async function addTransactionAction(formData: FormData) {
-  const user = await getCurrentUser();
-  if (!user) return { error: "Unauthorized" };
+  const user = await requireAuth();
 
   const houseIdStr = formData.get("houseId") as string;
   const houseId = parseInt(houseIdStr, 10);
@@ -177,21 +177,19 @@ export async function getTransactions(filters: TransactionFilterOptions = {}) {
   const user = await getCurrentUser();
   if (!user) return [];
 
-  const cacheKey = `transactions:${user.id}:${JSON.stringify(filters)}`;
+  const { targetIds, cacheKeySegment } = await resolveTargetHouseIds(
+    filters.houseId
+  );
+  const cacheKey = `transactions:${user.id}:${cacheKeySegment}:${JSON.stringify(filters)}`;
   const cached = cacheGet<any[]>(cacheKey);
   if (cached) return cached;
 
-  const whereClause: any = {};
+  const whereClause: any = {
+    houseId: { in: targetIds },
+  };
 
   if (!filters.includeDeleted) {
     whereClause.deletedAt = null;
-  }
-
-  if (filters.houseId && filters.houseId !== "ALL") {
-    whereClause.houseId =
-      typeof filters.houseId === "number"
-        ? filters.houseId
-        : parseInt(filters.houseId, 10);
   }
 
   if (filters.type && filters.type !== "ALL") {
@@ -351,8 +349,7 @@ export async function getTransactions(filters: TransactionFilterOptions = {}) {
 }
 
 export async function softDeleteTransactionAction(id: number | string) {
-  const user = await getCurrentUser();
-  if (!user) return { error: "Unauthorized" };
+  const user = await requireAuth();
 
   const txId = typeof id === "number" ? id : parseInt(id, 10);
   await prisma.transaction.updateMany({
@@ -367,8 +364,7 @@ export async function softDeleteTransactionAction(id: number | string) {
 }
 
 export async function restoreTransactionAction(id: number | string) {
-  const user = await getCurrentUser();
-  if (!user) return { error: "Unauthorized" };
+  const user = await requireAuth();
 
   const txId = typeof id === "number" ? id : parseInt(id, 10);
   await prisma.transaction.updateMany({
@@ -386,8 +382,7 @@ export async function toggleTransactionFlagAction(
   id: number | string,
   targetFlag?: boolean
 ) {
-  const user = await getCurrentUser();
-  if (!user) return { error: "Unauthorized" };
+  const user = await requireAuth();
 
   const txId = typeof id === "number" ? id : parseInt(id, 10);
   const existing = await prisma.transaction.findFirst({
@@ -413,8 +408,7 @@ export async function toggleTransactionFlagAction(
 }
 
 export async function updateTransactionAction(formData: FormData) {
-  const user = await getCurrentUser();
-  if (!user) return { error: "Unauthorized" };
+  await requireAuth();
 
   const idStr = formData.get("id") as string;
   const id = parseInt(idStr, 10);
@@ -493,17 +487,12 @@ export async function getCashflowTrendData(
   const user = await getCurrentUser();
   if (!user) return [];
 
-  const cacheKey = `cashflow_trend:${user.id}:${houseId || "all"}:${timeframe}`;
+  const { targetIds, cacheKeySegment } = await resolveTargetHouseIds(houseId);
+  const cacheKey = `cashflow_trend:${user.id}:${cacheKeySegment}:${timeframe}`;
   const cached = cacheGet<CashflowChartDataPoint[]>(cacheKey);
   if (cached) return cached;
 
-  const txWhere: any = { deletedAt: null };
-  if (houseId && houseId !== "ALL") {
-    const hId = typeof houseId === "number" ? houseId : parseInt(houseId, 10);
-    if (!isNaN(hId)) {
-      txWhere.houseId = hId;
-    }
-  }
+  const txWhere: any = { deletedAt: null, houseId: { in: targetIds } };
 
   const now = new Date();
   let endDate = new Date(
@@ -645,27 +634,15 @@ export async function getDashboardSummary(
   const user = await getCurrentUser();
   if (!user) return null;
 
-  const cacheKey = `dashboard:${user.id}:${selectedHouseId || "all"}:${timeframe}`;
+  const { targetIds, cacheKeySegment } =
+    await resolveTargetHouseIds(selectedHouseId);
+  const cacheKey = `dashboard:${user.id}:${cacheKeySegment}:${timeframe}`;
   const cached = cacheGet<any>(cacheKey);
   if (cached) return cached;
 
-  const houseWhere: any = { deletedAt: null };
-  const txWhere: any = { deletedAt: null };
-  const loanWhere: any = { deletedAt: null };
-  const repayWhere: any = { loan: { deletedAt: null } };
-
-  if (selectedHouseId && selectedHouseId !== "ALL") {
-    const hId =
-      typeof selectedHouseId === "number"
-        ? selectedHouseId
-        : parseInt(selectedHouseId, 10);
-    if (!isNaN(hId)) {
-      houseWhere.id = hId;
-      txWhere.houseId = hId;
-      loanWhere.houseId = hId;
-      repayWhere.houseId = hId;
-    }
-  }
+  const houseWhere: any = { deletedAt: null, id: { in: targetIds } };
+  const txWhere: any = { deletedAt: null, houseId: { in: targetIds } };
+  const loanWhere: any = { deletedAt: null, houseId: { in: targetIds } };
 
   // Run all independent queries concurrently in parallel with column-level select projection
   const [houses, transactions, loans, recentTransactions] = await Promise.all([
@@ -814,8 +791,7 @@ export async function syncTransactionsFromExcelAction(
     total: number;
   };
 }> {
-  const user = await getCurrentUser();
-  if (!user) return { error: "Unauthorized" };
+  const user = await requireAuth();
 
   const file = formData.get("file");
   if (!file || !(file instanceof File)) {

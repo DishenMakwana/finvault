@@ -187,6 +187,7 @@ export interface RentalIncomeSectionProps {
   data: RentalIncomeAnalyticsSummary;
   selectedYear: number;
   initialViewMode?: "TIMELINE" | "MATRIX" | "TABLE";
+  currentHouseId?: string | number;
 }
 
 export interface AnalyticsPageProps {

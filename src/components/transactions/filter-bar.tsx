@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useEffect, useMemo } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -14,7 +14,6 @@ import {
   ArrowLeftRight,
   Tag,
   Coins,
-  Check,
   Flag,
 } from "lucide-react";
 import {
@@ -22,6 +21,7 @@ import {
   DatePreset,
   FilterActiveChip,
 } from "@/types/transactions.types";
+import { useUserStore } from "@/stores/use-user-store";
 
 export function FilterBar({
   houses,
@@ -61,7 +61,6 @@ export function FilterBar({
       : rawFlagged === "false"
         ? "UNFLAGGED"
         : "ALL";
-  const activeFlagged = activeFlaggedStatus === "FLAGGED";
 
   // Local draft states
   const [searchInput, setSearchInput] = useState(activeSearch);
@@ -119,11 +118,6 @@ export function FilterBar({
     });
     const qs = params.toString();
     router.push(qs ? `${pathname}?${qs}` : pathname);
-  };
-
-  // Search commit
-  const handleSearchCommit = (value: string) => {
-    updateQuery({ search: value.trim() });
   };
 
   // Sync draft states when URL changes
@@ -188,6 +182,9 @@ export function FilterBar({
 
   // Apply modal filters
   const handleApplyModalFilters = () => {
+    if (modalHouseId) {
+      useUserStore.getState().setActiveHouseId(modalHouseId);
+    }
     updateQuery({
       houseId: modalHouseId,
       type: modalType,
@@ -207,6 +204,7 @@ export function FilterBar({
 
   // Reset all filters
   const handleClearAll = () => {
+    useUserStore.getState().setActiveHouseId("ALL");
     setSearchInput("");
     setModalHouseId("ALL");
     setModalType("ALL");
@@ -258,7 +256,10 @@ export function FilterBar({
       id: "house",
       label: selectedHouseObj.name,
       icon: Home,
-      onRemove: () => updateQuery({ houseId: "ALL" }),
+      onRemove: () => {
+        useUserStore.getState().setActiveHouseId("ALL");
+        updateQuery({ houseId: "ALL" });
+      },
     });
   }
   if (activeType !== "ALL") {
@@ -547,6 +548,12 @@ export function FilterBar({
           >
             Clear all
           </button>
+
+          {totalCount !== undefined && (
+            <span className="text-[11px] font-mono text-neutral-400 ml-auto hidden sm:inline-block">
+              {totalCount} transaction{totalCount === 1 ? "" : "s"} found
+            </span>
+          )}
         </div>
       )}
 

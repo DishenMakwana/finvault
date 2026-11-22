@@ -1,8 +1,7 @@
 "use client";
 
-import React from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import {
   LayoutDashboard,
   Home,
@@ -19,10 +18,22 @@ import { SidebarProps } from "@/types/layout.types";
 
 export function Sidebar({ userEmail, userName }: SidebarProps) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const storeUser = useUserStore((s) => s.user);
+  const storeActiveHouseId = useUserStore((s) => s.activeHouseId);
 
   const displayName = storeUser?.name || userName || "Family Manager";
   const displayEmail = storeUser?.email || userEmail || "user@finvault.local";
+
+  const activeHouseId = searchParams.get("houseId") || storeActiveHouseId;
+
+  const getHref = (baseHref: string) => {
+    if (baseHref === "/settings") return baseHref;
+    if (activeHouseId) {
+      return `${baseHref}?houseId=${encodeURIComponent(String(activeHouseId))}`;
+    }
+    return baseHref;
+  };
 
   const navItems = [
     { name: "Overview", href: "/", icon: LayoutDashboard },
@@ -60,7 +71,7 @@ export function Sidebar({ userEmail, userName }: SidebarProps) {
             return (
               <Link
                 key={item.href}
-                href={item.href}
+                href={getHref(item.href)}
                 className={`relative flex items-center justify-between px-3.5 py-2.5 rounded-xl text-xs font-semibold tracking-wide transition-all ${
                   isActive
                     ? "bg-primary-tint text-primary border border-primary shadow-sm"
@@ -93,7 +104,10 @@ export function Sidebar({ userEmail, userName }: SidebarProps) {
               {displayEmail}
             </p>
           </div>
-          <form action={logoutUser}>
+          <form
+            action={logoutUser}
+            onSubmit={() => useUserStore.getState().clearUser()}
+          >
             <button
               type="submit"
               title="Sign Out"

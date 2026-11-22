@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, type FormEvent } from "react";
 import { Home, Tag } from "lucide-react";
 import { Modal } from "@/components/ui/modal";
 import { CustomSelect } from "@/components/ui/custom-select";
+import { useUserStore } from "@/stores/use-user-store";
 import {
   addTransactionAction,
   getUniqueCategories,
@@ -17,8 +18,37 @@ export function AddOutflowModal({
   defaultHouseId,
   categories: initialCategories,
 }: QuickModalProps) {
+  const storeUser = useUserStore((s) => s.user);
+  const storeHouses = useUserStore((s) => s.houses);
+  const storeActiveHouseId = useUserStore((s) => s.activeHouseId);
+
+  const effectiveHouses = houses && houses.length > 0 ? houses : storeHouses;
+
+  const getResolvedHouseId = useCallback(() => {
+    // 1. If currently selected store house is owned by logged in user, use it
+    const isActiveOwned = effectiveHouses.some(
+      (h) =>
+        String(h.id) === String(storeActiveHouseId) &&
+        (h.isOwner || (storeUser?.id && h.userId === storeUser.id))
+    );
+    if (isActiveOwned) return String(storeActiveHouseId);
+
+    // 2. Otherwise default to user's first owned house
+    const userOwnedHouse = effectiveHouses.find(
+      (h) => h.isOwner || (storeUser?.id && h.userId === storeUser.id)
+    );
+    if (userOwnedHouse) return String(userOwnedHouse.id);
+
+    // 3. Fallback to passed default or first available house
+    if (defaultHouseId) return String(defaultHouseId);
+    return String(effectiveHouses[0]?.id || "");
+  }, [effectiveHouses, storeActiveHouseId, storeUser, defaultHouseId]);
+
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedHouseId, setSelectedHouseId] = useState<string>(() =>
+    getResolvedHouseId()
+  );
   const [dbCategories, setDbCategories] = useState<string[]>(
     initialCategories || []
   );
@@ -33,6 +63,7 @@ export function AddOutflowModal({
 
   useEffect(() => {
     if (isOpen) {
+      setSelectedHouseId(getResolvedHouseId());
       getUniqueCategories("OUTFLOW").then((cats) => {
         if (cats && cats.length > 0) {
           setDbCategories(cats);
@@ -42,9 +73,9 @@ export function AddOutflowModal({
       setCustomCategory("");
       setError(null);
     }
-  }, [isOpen]);
+  }, [isOpen, getResolvedHouseId]);
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
@@ -110,17 +141,19 @@ export function AddOutflowModal({
           <CustomSelect
             label="House / Property"
             name="houseId"
-            defaultValue={
-              defaultHouseId
-                ? String(defaultHouseId)
-                : String(houses[0]?.id || "")
-            }
+            value={selectedHouseId}
+            onChange={setSelectedHouseId}
             required
             icon={Home}
-            options={houses.map((h) => ({
-              value: String(h.id),
-              label: h.name,
-            }))}
+            options={effectiveHouses.map((h) => {
+              const isUserOwned = Boolean(
+                h.isOwner || (storeUser?.id && h.userId === storeUser.id)
+              );
+              return {
+                value: String(h.id),
+                label: isUserOwned ? `${h.name} (Your House)` : h.name,
+              };
+            })}
           />
 
           <div>

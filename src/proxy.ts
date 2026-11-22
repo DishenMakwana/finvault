@@ -1,13 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const protectedRoutes = [
-  "/",
-  "/transactions",
-  "/loans",
-  "/houses",
-  "/settings",
-];
-const authRoutes = ["/login"];
+const publicRoutes = ["/login", "/icon.svg", "/apple-icon.svg", "/favicon.ico"];
 
 // Fast JWT expiration check for middleware
 function isTokenExpired(token: string): boolean {
@@ -30,19 +23,23 @@ export default async function proxy(req: NextRequest) {
   const token = req.cookies.get("finvault_token")?.value;
   const { pathname } = req.nextUrl;
 
-  const isProtectedRoute = protectedRoutes.some((route) =>
-    route === "/" ? pathname === "/" : pathname.startsWith(route)
+  const isPublicRoute = publicRoutes.some((route) =>
+    route === "/login"
+      ? pathname === "/login" || pathname.startsWith("/login/")
+      : pathname === route
   );
-  const isAuthRoute = authRoutes.some((route) => pathname.startsWith(route));
+  const isAuthRoute = pathname === "/login" || pathname.startsWith("/login/");
+  const isProtectedRoute = !isPublicRoute;
 
   const hasExpired = token ? isTokenExpired(token) : true;
   const isAuthenticated = Boolean(token && !hasExpired);
 
   // If user is accessing protected route without a valid non-expired token, redirect to login
   if (isProtectedRoute && !isAuthenticated) {
-    const response = NextResponse.redirect(new URL("/login", req.url));
+    const loginUrl = new URL("/login", req.url);
+    const response = NextResponse.redirect(loginUrl);
     if (token) {
-      // Clear expired cookie
+      // Clear expired or invalid cookie
       response.cookies.delete("finvault_token");
     }
     return response;

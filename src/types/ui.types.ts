@@ -1,5 +1,5 @@
-import { LucideIcon } from "lucide-react";
-import React from "react";
+import type { LucideIcon } from "lucide-react";
+import type { ReactNode } from "react";
 
 interface SelectOption {
   value: string;
@@ -32,7 +32,7 @@ export interface ModalProps {
   onClose: () => void;
   title: string;
   subtitle?: string;
-  children: React.ReactNode;
+  children: ReactNode;
 }
 
 export interface ConfirmDeleteModalProps {
@@ -40,7 +40,7 @@ export interface ConfirmDeleteModalProps {
   onClose: () => void;
   onConfirm: () => void | Promise<void>;
   title?: string;
-  description?: React.ReactNode;
+  description?: ReactNode;
   confirmLabel?: string;
   cancelLabel?: string;
   loading?: boolean;
@@ -50,7 +50,8 @@ export interface SparkleStarProps {
   className?: string;
 }
 
-export type LoadingTheme = "teal" | "blue" | "purple" | "amber" | "rose";
+export type LoadingTheme =
+  "teal" | "emerald" | "cyan" | "blue" | "indigo" | "purple" | "amber" | "rose";
 export type LoadingSize = "sm" | "md" | "lg";
 
 export interface PremiumLoadingProps {

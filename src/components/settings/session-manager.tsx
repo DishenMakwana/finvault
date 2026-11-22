@@ -1,14 +1,8 @@
 "use client";
 
-import React, { useState } from "react";
-import {
-  ShieldCheck,
-  Laptop,
-  Smartphone,
-  Trash2,
-  Clock,
-  CheckCircle2,
-} from "lucide-react";
+import { useState } from "react";
+import { motion } from "framer-motion";
+import { ShieldCheck, Laptop, Smartphone, Trash2, Clock } from "lucide-react";
 import { revokeSessionAction } from "@/lib/actions/auth.actions";
 import { formatDateTime } from "@/lib/formatters";
 import { useUserStore } from "@/stores/use-user-store";
@@ -43,7 +37,12 @@ export function SessionManager({ sessions, userEmail }: SessionManagerProps) {
   return (
     <div className="space-y-6">
       {/* Overview Card */}
-      <div className="bg-card border border-border-subtle rounded-2xl p-6 shadow-xl flex items-center justify-between">
+      <motion.div
+        initial={{ opacity: 0, y: 14 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35, ease: "easeOut" }}
+        className="bg-card border border-border-subtle rounded-2xl p-6 shadow-xl flex items-center justify-between"
+      >
         <div className="flex items-center gap-4">
           <div className="w-12 h-12 rounded-2xl bg-primary/10 border border-primary/30 flex items-center justify-center text-primary">
             <ShieldCheck className="w-6 h-6" />
@@ -65,7 +64,7 @@ export function SessionManager({ sessions, userEmail }: SessionManagerProps) {
           <span className="w-2 h-2 rounded-full bg-primary animate-pulse" />
           Passport-JWT Active
         </span>
-      </div>
+      </motion.div>
 
       {/* Sessions Grid */}
       <div className="space-y-3">
@@ -79,8 +78,16 @@ export function SessionManager({ sessions, userEmail }: SessionManagerProps) {
             const isFirst = index === 0;
 
             return (
-              <div
+              <motion.div
                 key={session.id}
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{
+                  duration: 0.3,
+                  delay: 0.08 + index * 0.04,
+                  ease: "easeOut",
+                }}
+                whileHover={{ scale: 1.005 }}
                 className="bg-card border border-border-subtle hover:border-border-hover rounded-2xl p-5 shadow-lg flex flex-wrap items-center justify-between gap-4 transition-all"
               >
                 <div className="flex items-center gap-4">
@@ -128,7 +135,7 @@ export function SessionManager({ sessions, userEmail }: SessionManagerProps) {
                     <span>Revoke Session</span>
                   </button>
                 </div>
-              </div>
+              </motion.div>
             );
           })}
         </div>
