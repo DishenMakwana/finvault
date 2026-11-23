@@ -15,34 +15,32 @@ import { DashboardPageProps, CashflowTimeframe } from "@/types/dashboard.types";
 export default async function DashboardPage({
   searchParams,
 }: DashboardPageProps) {
-  const [user, resolvedParams, houses] = await Promise.all([
-    requireAuth(),
-    searchParams,
-    getAllHouses(),
-  ]);
-  const userHome =
-    houses.find((h) => h.isOwner || h.userId === user?.id) || houses[0];
-  const defaultHouseId = userHome ? String(userHome.id) : "ALL";
+  const resolvedParams = (await searchParams) || {};
   const cookieStore = await cookies();
   const cookieHouseId = cookieStore.get("finvault_active_house")?.value;
-  const currentHouseId =
-    resolvedParams.houseId !== undefined
-      ? resolvedParams.houseId
-      : cookieHouseId || defaultHouseId;
   const currentTimeframe =
     (resolvedParams.timeframe as CashflowTimeframe) || "1Y";
 
+  // If houseId is not present in URL parameters, determine target and redirect
   if (resolvedParams.houseId === undefined) {
+    const [user, houses] = await Promise.all([requireAuth(), getAllHouses()]);
+    const userHome =
+      houses.find((h) => h.isOwner || h.userId === user?.id) || houses[0];
+    const defaultHouseId = userHome ? String(userHome.id) : "ALL";
+    const targetHouseId = cookieHouseId || defaultHouseId;
+
     const params = new URLSearchParams();
-    params.set("houseId", String(currentHouseId));
+    params.set("houseId", String(targetHouseId));
     if (resolvedParams.timeframe) {
       params.set("timeframe", resolvedParams.timeframe);
     }
     redirect(`/?${params.toString()}`);
   }
 
-  const [summary, activeSessions] = await Promise.all([
-    getDashboardSummary(currentHouseId, currentTimeframe),
+  // Single-wave parallel database execution
+  const [, summary, activeSessions] = await Promise.all([
+    requireAuth(),
+    getDashboardSummary(resolvedParams.houseId, currentTimeframe),
     getUserActiveSessions(),
   ]);
 
@@ -178,7 +176,7 @@ export default async function DashboardPage({
         <div className="lg:col-span-2">
           <CashflowChart
             initialData={timelineData}
-            currentHouseId={currentHouseId}
+            currentHouseId={resolvedParams.houseId}
             initialTimeframe={currentTimeframe}
           />
         </div>

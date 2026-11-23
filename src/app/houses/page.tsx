@@ -12,27 +12,27 @@ export default async function HousesPage({
 }: {
   searchParams?: Promise<{ houseId?: string }>;
 }) {
-  const [user, resolvedParams, allHouses] = await Promise.all([
-    requireAuth(),
-    searchParams ? await searchParams : {},
-    getAllHouses(),
-  ]);
-  const userHome =
-    allHouses.find((h) => h.isOwner || h.userId === user?.id) || allHouses[0];
-  const defaultHouseId = userHome ? String(userHome.id) : "ALL";
+  const resolvedParams = searchParams ? await searchParams : {};
   const cookieStore = await cookies();
   const cookieHouseId = cookieStore.get("finvault_active_house")?.value;
-  const currentHouseId =
-    resolvedParams.houseId !== undefined
-      ? resolvedParams.houseId
-      : cookieHouseId || defaultHouseId;
 
   if (resolvedParams.houseId === undefined) {
+    const [user, allHouses] = await Promise.all([
+      requireAuth(),
+      getAllHouses(),
+    ]);
+    const userHome =
+      allHouses.find((h) => h.isOwner || h.userId === user?.id) || allHouses[0];
+    const defaultHouseId = userHome ? String(userHome.id) : "ALL";
+    const currentHouseId = cookieHouseId || defaultHouseId;
     redirect(`/houses?houseId=${currentHouseId}`);
   }
 
-  const { houses, totalCurrentCash, totalInitialCash } =
-    await getHousesWithBalances(currentHouseId);
+  // Single-wave parallel database execution
+  const [, { houses, totalCurrentCash, totalInitialCash }] = await Promise.all([
+    requireAuth(),
+    getHousesWithBalances(resolvedParams.houseId),
+  ]);
 
   return (
     <div className="space-y-6">

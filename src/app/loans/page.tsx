@@ -10,26 +10,25 @@ import { redirect } from "next/navigation";
 import { LoansPageProps } from "@/types/loans.types";
 
 export default async function LoansPage({ searchParams }: LoansPageProps) {
-  const [user, resolvedParams, houses] = await Promise.all([
-    requireAuth(),
-    searchParams,
-    getAllHouses(),
-  ]);
-  const userHome =
-    houses.find((h) => h.isOwner || h.userId === user?.id) || houses[0];
-  const defaultHouseId = userHome ? String(userHome.id) : "ALL";
+  const resolvedParams = (await searchParams) || {};
   const cookieStore = await cookies();
   const cookieHouseId = cookieStore.get("finvault_active_house")?.value;
-  const houseId =
-    resolvedParams.houseId !== undefined
-      ? resolvedParams.houseId
-      : cookieHouseId || defaultHouseId;
 
   if (resolvedParams.houseId === undefined) {
+    const [user, houses] = await Promise.all([requireAuth(), getAllHouses()]);
+    const userHome =
+      houses.find((h) => h.isOwner || h.userId === user?.id) || houses[0];
+    const defaultHouseId = userHome ? String(userHome.id) : "ALL";
+    const houseId = cookieHouseId || defaultHouseId;
     redirect(`/loans?houseId=${houseId}`);
   }
 
-  const loans = await getLoans(houseId);
+  // Single-wave parallel database execution
+  const [, houses, loans] = await Promise.all([
+    requireAuth(),
+    getAllHouses(),
+    getLoans(resolvedParams.houseId),
+  ]);
 
   // Summary Metrics
   const totalLent = loans.reduce((acc, l) => acc + Number(l.totalAmount), 0);

@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "./prisma";
 import { JwtPayload } from "@/types/settings.types";
 import { cacheGet, cacheSet, cacheInvalidateTag } from "./cache";
+import { UAParser } from "ua-parser-js";
 
 const JWT_SECRET =
   process.env.JWT_SECRET ||
@@ -62,18 +63,53 @@ export async function createSession(userId: number, email: string) {
     const headersList = await headers();
     userAgent = headersList.get("user-agent") || userAgent;
     ipAddress =
-      headersList.get("x-forwarded-for")?.split(",")[0].trim() || ipAddress;
+      headersList.get("x-forwarded-for")?.split(",")[0].trim() ||
+      headersList.get("x-real-ip") ||
+      ipAddress;
   } catch {
     // headers() might not be available
   }
 
-  // 1. Create session in database with synchronized expiresAt
+  // Parse client device & browser metadata with ua-parser-js v2
+  const parsed = new UAParser(userAgent).getResult();
+  const browserName = parsed.browser.name || null;
+  const browserVersion = parsed.browser.version || null;
+  const osName = parsed.os.name || null;
+  const osVersion = parsed.os.version || null;
+  const deviceType =
+    parsed.device.type ||
+    (parsed.os.name && /android|ios/i.test(parsed.os.name)
+      ? "mobile"
+      : "desktop");
+  const deviceVendor =
+    parsed.device.vendor ||
+    (parsed.os.name && /macos|mac os|ios/i.test(parsed.os.name)
+      ? "Apple"
+      : null);
+  const deviceModel =
+    parsed.device.model ||
+    (parsed.os.name && /macos|mac os/i.test(parsed.os.name)
+      ? "Mac"
+      : parsed.os.name && /windows/i.test(parsed.os.name)
+        ? "PC"
+        : null);
+  const cpuArchitecture = parsed.cpu.architecture || null;
+
+  // 1. Create session in database with synchronized expiresAt & device metadata
   const session = await prisma.session.create({
     data: {
       userId,
       token: "", // Placeholder, will update after signing
       userAgent,
       ipAddress,
+      browserName,
+      browserVersion,
+      osName,
+      osVersion,
+      deviceType,
+      deviceVendor,
+      deviceModel,
+      cpuArchitecture,
       expiresAt,
     },
   });
@@ -170,6 +206,19 @@ export const getCurrentUser = cache(async () => {
   }
 });
 
+export const getCurrentSessionId = cache(async (): Promise<number | null> => {
+  try {
+    const cookieStore = await cookies();
+    const token = cookieStore.get(COOKIE_NAME)?.value;
+    if (!token) return null;
+
+    const decoded = await verifyToken(token);
+    return decoded?.sessionId || null;
+  } catch {
+    return null;
+  }
+});
+
 export async function requireAuth() {
   const user = await getCurrentUser();
   if (!user) {
@@ -211,19 +260,6 @@ export async function revokeSession(sessionId: number, userId: number) {
     where: {
       id: sessionId,
       userId,
-    },
-  });
-}
-
-export async function revokeAllOtherSessions(
-  currentSessionId: number,
-  userId: number
-) {
-  cacheInvalidateTag("sessions");
-  return prisma.session.deleteMany({
-    where: {
-      userId,
-      id: { not: currentSessionId },
     },
   });
 }

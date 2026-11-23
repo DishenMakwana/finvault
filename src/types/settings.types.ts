@@ -2,6 +2,14 @@ export interface SessionItem {
   id: number | string;
   userAgent?: string | null;
   ipAddress?: string | null;
+  browserName?: string | null;
+  browserVersion?: string | null;
+  osName?: string | null;
+  osVersion?: string | null;
+  deviceType?: string | null;
+  deviceVendor?: string | null;
+  deviceModel?: string | null;
+  cpuArchitecture?: string | null;
   createdAt: Date | string;
   expiresAt: Date | string;
   token: string;
@@ -10,6 +18,7 @@ export interface SessionItem {
 export interface SessionManagerProps {
   sessions: SessionItem[];
   userEmail: string;
+  currentSessionId?: number | string | null;
 }
 
 export interface JwtPayload {

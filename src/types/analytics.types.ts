@@ -130,7 +130,7 @@ export interface HouseAnalyticsSectionProps {
   data: HouseAnalyticsSummary;
 }
 
-export type RentalMonthStatus =
+type RentalMonthStatus =
   | "PAID"
   | "COMBINED_PRIMARY"
   | "COMBINED_COVERED"

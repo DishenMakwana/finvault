@@ -27,13 +27,13 @@ import {
   Building2,
   Tag,
 } from "lucide-react";
+import { formatCompactINR, formatINR } from "@/lib/formatters";
 import {
   CashflowAnalyticsChartProps,
   AnalyticsDatePreset,
   AnalyticsViewMode,
   AnalyticsDataPoint,
 } from "@/types/analytics.types";
-import { formatCompactINR, formatINR } from "@/lib/formatters";
 
 export function CashflowAnalyticsChart({
   initialData,

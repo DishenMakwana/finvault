@@ -22,22 +22,18 @@ import {
 export default async function AnalyticsPage({
   searchParams,
 }: AnalyticsPageProps) {
-  const [user, resolvedParams, houses] = await Promise.all([
-    requireAuth(),
-    searchParams,
-    getAllHouses(),
-  ]);
-  const userHome =
-    houses.find((h) => h.isOwner || h.userId === user?.id) || houses[0];
-  const defaultHouseId = userHome ? String(userHome.id) : "ALL";
+  const resolvedParams = (await searchParams) || {};
   const cookieStore = await cookies();
   const cookieHouseId = cookieStore.get("finvault_active_house")?.value;
-  const currentHouseId =
-    resolvedParams.houseId !== undefined
-      ? resolvedParams.houseId
-      : cookieHouseId || defaultHouseId;
 
   if (resolvedParams.houseId === undefined) {
+    const [user, houses] = await Promise.all([requireAuth(), getAllHouses()]);
+
+    const userHome =
+      houses.find((h) => h.isOwner || h.userId === user?.id) || houses[0];
+    const defaultHouseId = userHome ? String(userHome.id) : "ALL";
+    const currentHouseId = cookieHouseId || defaultHouseId;
+
     const params = new URLSearchParams();
     params.set("houseId", String(currentHouseId));
     if (resolvedParams.range) params.set("range", resolvedParams.range);
@@ -52,6 +48,7 @@ export default async function AnalyticsPage({
     redirect(`/analytics?${params.toString()}`);
   }
 
+  const currentHouseId = resolvedParams.houseId;
   const currentRange = (resolvedParams.range as AnalyticsDatePreset) || "1Y";
   const currentStartDate = resolvedParams.startDate;
   const currentEndDate = resolvedParams.endDate;
@@ -68,18 +65,21 @@ export default async function AnalyticsPage({
         ? "TABLE"
         : "TIMELINE";
 
-  // Run all independent queries in parallel
-  const [houseAnalytics, analyticsData, rentalAnalytics] = await Promise.all([
-    getHouseAnalyticsData(currentHouseId),
-    getCashflowAnalytics({
-      houseId: currentHouseId,
-      range: currentRange,
-      startDate: currentStartDate,
-      endDate: currentEndDate,
-      mode: currentMode,
-    }),
-    getRentalIncomeAnalyticsData(rentalYear, currentHouseId),
-  ]);
+  // Single-wave parallel fetch for all page dependencies
+  const [, houses, houseAnalytics, analyticsData, rentalAnalytics] =
+    await Promise.all([
+      requireAuth(),
+      getAllHouses(),
+      getHouseAnalyticsData(currentHouseId),
+      getCashflowAnalytics({
+        houseId: currentHouseId,
+        range: currentRange,
+        startDate: currentStartDate,
+        endDate: currentEndDate,
+        mode: currentMode,
+      }),
+      getRentalIncomeAnalyticsData(rentalYear, currentHouseId),
+    ]);
 
   const { summary } = analyticsData;
   const totalFlow = summary.totalInflow + summary.totalOutflow;

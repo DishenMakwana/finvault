@@ -16,24 +16,18 @@ import { TransactionsPageProps } from "@/types/transactions.types";
 export default async function TransactionsPage({
   searchParams,
 }: TransactionsPageProps) {
-  // Parallelize auth, route parameters, and initial houses query
-  const [user, resolvedParams, houses] = await Promise.all([
-    requireAuth(),
-    searchParams,
-    getAllHouses(),
-  ]);
-
-  const userHome =
-    houses.find((h) => h.isOwner || h.userId === user?.id) || houses[0];
-  const defaultHouseId = userHome ? String(userHome.id) : "ALL";
+  const resolvedParams = (await searchParams) || {};
   const cookieStore = await cookies();
   const cookieHouseId = cookieStore.get("finvault_active_house")?.value;
-  const effectiveHouseId =
-    resolvedParams.houseId !== undefined
-      ? resolvedParams.houseId
-      : cookieHouseId || defaultHouseId;
 
   if (resolvedParams.houseId === undefined) {
+    const [user, houses] = await Promise.all([requireAuth(), getAllHouses()]);
+
+    const userHome =
+      houses.find((h) => h.isOwner || h.userId === user?.id) || houses[0];
+    const defaultHouseId = userHome ? String(userHome.id) : "ALL";
+    const effectiveHouseId = cookieHouseId || defaultHouseId;
+
     const params = new URLSearchParams();
     params.set("houseId", String(effectiveHouseId));
     Object.entries(resolvedParams).forEach(([k, v]) => {
@@ -48,36 +42,47 @@ export default async function TransactionsPage({
     redirect(`/transactions?${params.toString()}`);
   }
 
-  // Execute transaction filtering with direct database-level sorting and category lookups in parallel
-  const [transactions, categories, inflowCategories, outflowCategories] =
-    await Promise.all([
-      getTransactions({
-        houseId: effectiveHouseId,
-        type: resolvedParams.type,
-        category: resolvedParams.category,
-        startDate: resolvedParams.startDate,
-        endDate: resolvedParams.endDate,
-        minAmount: resolvedParams.minAmount
-          ? parseFloat(resolvedParams.minAmount)
-          : undefined,
-        maxAmount: resolvedParams.maxAmount
-          ? parseFloat(resolvedParams.maxAmount)
-          : undefined,
-        search: resolvedParams.search,
-        sortBy: resolvedParams.sortBy,
-        sortOrder: resolvedParams.sortOrder === "asc" ? "asc" : "desc",
-        isFlagged:
-          resolvedParams.flagged === "true" || resolvedParams.flagged === "1"
-            ? true
-            : resolvedParams.flagged === "false" ||
-                resolvedParams.flagged === "0"
-              ? false
-              : undefined,
-      }),
-      getUniqueCategories(),
-      getUniqueCategories("INFLOW"),
-      getUniqueCategories("OUTFLOW"),
-    ]);
+  // Single-wave parallel fetch for all page dependencies
+  const [
+    user,
+    houses,
+    transactions,
+    categories,
+    inflowCategories,
+    outflowCategories,
+  ] = await Promise.all([
+    requireAuth(),
+    getAllHouses(),
+    getTransactions({
+      houseId: resolvedParams.houseId,
+      type: resolvedParams.type,
+      category: resolvedParams.category,
+      startDate: resolvedParams.startDate,
+      endDate: resolvedParams.endDate,
+      minAmount: resolvedParams.minAmount
+        ? parseFloat(resolvedParams.minAmount)
+        : undefined,
+      maxAmount: resolvedParams.maxAmount
+        ? parseFloat(resolvedParams.maxAmount)
+        : undefined,
+      search: resolvedParams.search,
+      sortBy: resolvedParams.sortBy,
+      sortOrder: resolvedParams.sortOrder === "asc" ? "asc" : "desc",
+      isFlagged:
+        resolvedParams.flagged === "true" || resolvedParams.flagged === "1"
+          ? true
+          : resolvedParams.flagged === "false" || resolvedParams.flagged === "0"
+            ? false
+            : undefined,
+    }),
+    getUniqueCategories(),
+    getUniqueCategories("INFLOW"),
+    getUniqueCategories("OUTFLOW"),
+  ]);
+
+  const userHome =
+    houses.find((h) => h.isOwner || h.userId === user?.id) || houses[0];
+  const defaultHouseId = userHome ? String(userHome.id) : "ALL";
 
   // Calculate summary metrics for KPI cards
   let totalInflow = 0;

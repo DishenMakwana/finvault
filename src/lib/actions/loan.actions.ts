@@ -200,20 +200,3 @@ export async function recordRepaymentAction(formData: FormData) {
   revalidatePath("/loans");
   return { success: true };
 }
-
-export async function deleteLoanAction(id: number | string) {
-  const user = await requireAuth();
-
-  const loanId = typeof id === "number" ? id : parseInt(id, 10);
-  await prisma.loan.updateMany({
-    where: { id: loanId, userId: user.id },
-    data: { deletedAt: new Date() },
-  });
-
-  cacheInvalidateTag("loans");
-  cacheInvalidateTag("dashboard");
-  cacheInvalidateTag("houses");
-  revalidatePath("/");
-  revalidatePath("/loans");
-  return { success: true };
-}
