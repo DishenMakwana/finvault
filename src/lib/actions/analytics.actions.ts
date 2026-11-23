@@ -17,6 +17,14 @@ import {
   RentalIncomeAnalyticsSummary,
   RentalUnitSummary,
   RentalMonthCell,
+  SpendingCadenceAnalyticsResult,
+  SpendingCadenceAvailableItem,
+  CadenceOccurrence,
+  CadenceIntervalBucket,
+  DayOfMonthCluster,
+  DayOfWeekDistribution,
+  MonthlySpendRunRate,
+  SubTypeDecomposition,
 } from "@/types/analytics.types";
 
 function formatPointLabel(d: Date): string {
@@ -162,9 +170,10 @@ export async function getCashflowAnalytics(
 
   const { houseId, range = "1Y", startDate, endDate } = params;
 
-  const { targetIds, cacheKeySegment } = await resolveTargetHouseIds(houseId);
+  const { targetIds, isAll, cacheKeySegment } =
+    await resolveTargetHouseIds(houseId);
 
-  const cacheKey = `analytics:${user.id}:${cacheKeySegment}:${range}:${startDate || ""}:${endDate || ""}`;
+  const cacheKey = `analytics:${cacheKeySegment}:${range}:${startDate || ""}:${endDate || ""}`;
   const cached = cacheGet<CashflowAnalyticsResponse>(cacheKey);
   if (cached) return cached;
 
@@ -228,10 +237,10 @@ export async function getCashflowAnalytics(
     }
   }
 
-  // Build where filter
+  // Build where filter: when isAll, include all non-deleted transactions across all houses
   const where: any = {
     deletedAt: null,
-    houseId: { in: targetIds },
+    ...(isAll ? {} : { houseId: { in: targetIds } }),
     dateOfAdd: {
       gte: computedStart,
       lte: computedEnd,
@@ -427,10 +436,10 @@ export async function getHouseAnalyticsData(
     };
   }
 
-  const { targetIds, cacheKeySegment } =
+  const { targetIds, isAll, cacheKeySegment } =
     await resolveTargetHouseIds(selectedHouseId);
 
-  const cacheKey = `analytics:houses:${user.id}:${cacheKeySegment}`;
+  const cacheKey = `analytics:houses:${cacheKeySegment}`;
   const cached = cacheGet<HouseAnalyticsSummary>(cacheKey);
   if (cached) return cached;
 
@@ -439,7 +448,7 @@ export async function getHouseAnalyticsData(
     prisma.house.findMany({
       where: {
         deletedAt: null,
-        id: { in: targetIds },
+        ...(isAll ? {} : { id: { in: targetIds } }),
       },
       select: {
         id: true,
@@ -451,7 +460,7 @@ export async function getHouseAnalyticsData(
     prisma.transaction.findMany({
       where: {
         deletedAt: null,
-        houseId: { in: targetIds },
+        ...(isAll ? {} : { houseId: { in: targetIds } }),
       },
       select: {
         id: true,
@@ -464,7 +473,7 @@ export async function getHouseAnalyticsData(
     prisma.loan.findMany({
       where: {
         deletedAt: null,
-        houseId: { in: targetIds },
+        ...(isAll ? {} : { houseId: { in: targetIds } }),
       },
       select: {
         houseId: true,
@@ -772,10 +781,10 @@ export async function getRentalIncomeAnalyticsData(
     return defaultEmptySummary;
   }
 
-  const { targetIds, cacheKeySegment } =
+  const { targetIds, isAll, cacheKeySegment } =
     await resolveTargetHouseIds(filterHouseId);
 
-  const cacheKey = `rental_analytics:${user.id}:${year}:${cacheKeySegment}`;
+  const cacheKey = `rental_analytics:${year}:${cacheKeySegment}`;
   const cached = cacheGet<RentalIncomeAnalyticsSummary>(cacheKey);
   if (cached) return cached;
 
@@ -786,7 +795,7 @@ export async function getRentalIncomeAnalyticsData(
         deletedAt: null,
         type: "INFLOW",
         category: { equals: "rental income", mode: "insensitive" },
-        houseId: { in: targetIds },
+        ...(isAll ? {} : { houseId: { in: targetIds } }),
       },
       select: {
         id: true,
@@ -1220,4 +1229,543 @@ export async function toggleRentalVacancyAction({
   cacheInvalidateTag("analytics");
   revalidatePath("/analytics");
   return { success: true };
+}
+
+function classifySubType(
+  title: string,
+  category: string
+): "fuel" | "service" | "repair" | "care" | "insurance" | "general" {
+  const text = `${title} ${category}`.toLowerCase();
+  if (/diesel|petrol|fuel|refill|gas/i.test(text)) return "fuel";
+  if (/service|servicing|maintenance|oil change/i.test(text)) return "service";
+  if (/toing|towing|repair|accident|puncture|breakdown|mechanic/i.test(text))
+    return "repair";
+  if (/wash|cleaning|clean|detail|polish/i.test(text)) return "care";
+  if (/insurance|policy|rto|tax|apply charge/i.test(text)) return "insurance";
+  return "general";
+}
+
+export async function getSpendingCadenceAvailableItems(
+  houseId?: string | number
+): Promise<SpendingCadenceAvailableItem[]> {
+  const user = await getCurrentUser();
+  if (!user) return [];
+
+  const { targetIds, isAll, cacheKeySegment } =
+    await resolveTargetHouseIds(houseId);
+  const cacheKey = `cadence:items:${cacheKeySegment}`;
+  const cached = cacheGet<SpendingCadenceAvailableItem[]>(cacheKey);
+  if (cached) return cached;
+
+  const houseFilter = isAll ? {} : { houseId: { in: targetIds } };
+
+  // 1. Check Black Kia count & total across target house(s) (never restricted by userId)
+  const [kiaCount, kiaSum] = await Promise.all([
+    prisma.transaction.count({
+      where: {
+        type: "OUTFLOW",
+        deletedAt: null,
+        ...houseFilter,
+        OR: [
+          { title: { contains: "Black Kia", mode: "insensitive" } },
+          { title: { contains: "Kia", mode: "insensitive" } },
+        ],
+      },
+    }),
+    prisma.transaction.aggregate({
+      where: {
+        type: "OUTFLOW",
+        deletedAt: null,
+        ...houseFilter,
+        OR: [
+          { title: { contains: "Black Kia", mode: "insensitive" } },
+          { title: { contains: "Kia", mode: "insensitive" } },
+        ],
+      },
+      _sum: { amount: true },
+    }),
+  ]);
+
+  // 2. Check White Kia count & total across target house(s) (never restricted by userId)
+  const [whiteKiaCount, whiteKiaSum] = await Promise.all([
+    prisma.transaction.count({
+      where: {
+        type: "OUTFLOW",
+        deletedAt: null,
+        ...houseFilter,
+        title: { contains: "White Kia", mode: "insensitive" },
+      },
+    }),
+    prisma.transaction.aggregate({
+      where: {
+        type: "OUTFLOW",
+        deletedAt: null,
+        ...houseFilter,
+        title: { contains: "White Kia", mode: "insensitive" },
+      },
+      _sum: { amount: true },
+    }),
+  ]);
+
+  // 3. Top categories with outflow transactions across target house(s) (never restricted by userId)
+  const categories = await prisma.transaction.groupBy({
+    by: ["category"],
+    where: {
+      type: "OUTFLOW",
+      deletedAt: null,
+      ...houseFilter,
+    },
+    _count: { _all: true },
+    _sum: { amount: true },
+    orderBy: { _count: { category: "desc" } },
+    take: 12,
+  });
+
+  const items: SpendingCadenceAvailableItem[] = [];
+
+  if (kiaCount > 0) {
+    items.push({
+      id: "black-kia",
+      label: "Black Kia Diesel",
+      category: "diesel",
+      count: kiaCount,
+      totalSpent: Number(kiaSum._sum?.amount || 0),
+      isFeatured: true,
+    });
+  }
+
+  if (whiteKiaCount > 0) {
+    items.push({
+      id: "white-kia",
+      label: "White Kia Petrol",
+      category: "diesel",
+      count: whiteKiaCount,
+      totalSpent: Number(whiteKiaSum._sum?.amount || 0),
+      isFeatured: true,
+    });
+  }
+
+  for (const cat of categories) {
+    if (cat.category.toLowerCase() === "diesel") continue;
+    items.push({
+      id: `cat:${cat.category}`,
+      label: cat.category.charAt(0).toUpperCase() + cat.category.slice(1),
+      category: cat.category,
+      count: cat._count?._all || 0,
+      totalSpent: Number(cat._sum?.amount || 0),
+    });
+  }
+
+  cacheSet(cacheKey, items, 30000, ["analytics", "transactions"]);
+  return items;
+}
+
+export async function getItemSpendingCadenceAnalytics(
+  queryKey: string = "black-kia",
+  houseId?: string | number
+): Promise<SpendingCadenceAnalyticsResult> {
+  const user = await getCurrentUser();
+  if (!user) {
+    return {
+      queryKey,
+      queryLabel: "Unauthorized",
+      totalSpent: 0,
+      totalOccurrences: 0,
+      averageAmount: 0,
+      medianAmount: 0,
+      minAmount: 0,
+      maxAmount: 0,
+      averageIntervalDays: 0,
+      medianIntervalDays: 0,
+      minIntervalDays: 0,
+      maxIntervalDays: 0,
+      regularityScore: 0,
+      predictedNextOccurrenceDate: null,
+      predictedNextAmount: 0,
+      firstOccurrenceDate: "",
+      lastOccurrenceDate: "",
+      occurrences: [],
+      intervalBuckets: [],
+      dayOfMonthClusters: [],
+      dayOfWeekDistribution: [],
+      monthlyRunRates: [],
+      subTypeBreakdown: [],
+      anomaliesCount: 0,
+    };
+  }
+
+  const { targetIds, isAll, cacheKeySegment } =
+    await resolveTargetHouseIds(houseId);
+
+  const cacheKey = `cadence:${cacheKeySegment}:${queryKey}`;
+  const cached = cacheGet<SpendingCadenceAnalyticsResult>(cacheKey);
+  if (cached) return cached;
+
+  const whereClause: any = {
+    type: "OUTFLOW",
+    deletedAt: null,
+    ...(isAll ? {} : { houseId: { in: targetIds } }),
+  };
+
+  let queryLabel = "Black Kia Diesel";
+
+  if (queryKey === "black-kia") {
+    whereClause.OR = [
+      { title: { contains: "Black Kia", mode: "insensitive" } },
+      { title: { contains: "Kia", mode: "insensitive" } },
+    ];
+    queryLabel = "Black Kia Diesel";
+  } else if (queryKey === "white-kia") {
+    whereClause.title = { contains: "White Kia", mode: "insensitive" };
+    queryLabel = "White Kia Petrol";
+  } else if (queryKey.startsWith("cat:")) {
+    const catName = queryKey.replace("cat:", "");
+    whereClause.category = { equals: catName, mode: "insensitive" };
+    queryLabel = catName.charAt(0).toUpperCase() + catName.slice(1);
+  } else {
+    whereClause.OR = [
+      { category: { contains: queryKey, mode: "insensitive" } },
+      { title: { contains: queryKey, mode: "insensitive" } },
+    ];
+    queryLabel = queryKey;
+  }
+
+  const transactions = await prisma.transaction.findMany({
+    where: whereClause,
+    orderBy: { dateOfAdd: "asc" },
+    include: { house: { select: { name: true } } },
+  });
+
+  if (transactions.length === 0) {
+    const emptyResult: SpendingCadenceAnalyticsResult = {
+      queryKey,
+      queryLabel,
+      totalSpent: 0,
+      totalOccurrences: 0,
+      averageAmount: 0,
+      medianAmount: 0,
+      minAmount: 0,
+      maxAmount: 0,
+      averageIntervalDays: 0,
+      medianIntervalDays: 0,
+      minIntervalDays: 0,
+      maxIntervalDays: 0,
+      regularityScore: 0,
+      predictedNextOccurrenceDate: null,
+      predictedNextAmount: 0,
+      firstOccurrenceDate: "",
+      lastOccurrenceDate: "",
+      occurrences: [],
+      intervalBuckets: [],
+      dayOfMonthClusters: [],
+      dayOfWeekDistribution: [],
+      monthlyRunRates: [],
+      subTypeBreakdown: [],
+      anomaliesCount: 0,
+    };
+    cacheSet(cacheKey, emptyResult, 30000, ["analytics", "transactions"]);
+    return emptyResult;
+  }
+
+  let totalSpent = 0;
+  const amounts = transactions.map((t) => {
+    const val = Number(t.amount);
+    totalSpent += val;
+    return val;
+  });
+
+  const sortedAmounts = [...amounts].sort((a, b) => a - b);
+  const minAmount = sortedAmounts[0];
+  const maxAmount = sortedAmounts[sortedAmounts.length - 1];
+  const medianAmount = sortedAmounts[Math.floor(sortedAmounts.length / 2)];
+  const averageAmount = Math.round(totalSpent / transactions.length);
+
+  // Compute intervals between consecutive transactions
+  const intervals: number[] = [];
+  let cumulative = 0;
+  const occurrences: CadenceOccurrence[] = [];
+  let anomaliesCount = 0;
+
+  for (let i = 0; i < transactions.length; i++) {
+    const tx = transactions[i];
+    const amt = Number(tx.amount);
+    cumulative += amt;
+
+    let daysSincePrevious: number | null = null;
+    if (i > 0) {
+      const prevDate = new Date(transactions[i - 1].dateOfAdd).getTime();
+      const currDate = new Date(tx.dateOfAdd).getTime();
+      daysSincePrevious = Math.max(
+        0,
+        Math.round((currDate - prevDate) / (1000 * 60 * 60 * 24))
+      );
+      intervals.push(daysSincePrevious);
+    }
+
+    const subType = classifySubType(tx.title, tx.category);
+
+    // Anomaly checks
+    let isAnomaly = false;
+    let anomalyReason: string | undefined;
+
+    if (amt >= 2.5 * medianAmount && amt > 5000) {
+      isAnomaly = true;
+      anomalyReason = `High amount spike (₹${amt.toLocaleString("en-IN")})`;
+      anomaliesCount++;
+    } else if (
+      daysSincePrevious !== null &&
+      daysSincePrevious <= 1 &&
+      amt >= 2000
+    ) {
+      isAnomaly = true;
+      anomalyReason = "Clustered spend within 24-48h";
+      anomaliesCount++;
+    }
+
+    occurrences.push({
+      id: tx.id,
+      date: tx.dateOfAdd.toISOString().split("T")[0],
+      amount: amt,
+      title: tx.title,
+      category: tx.category,
+      houseId: tx.houseId,
+      houseName: tx.house.name,
+      daysSincePrevious,
+      cumulativeTotal: cumulative,
+      isAnomaly,
+      anomalyReason,
+      subType,
+    });
+  }
+
+  // Interval stats
+  let averageIntervalDays = 0;
+  let medianIntervalDays = 0;
+  let minIntervalDays = 0;
+  let maxIntervalDays = 0;
+  let regularityScore = 0;
+
+  if (intervals.length > 0) {
+    const sortedIntervals = [...intervals].sort((a, b) => a - b);
+    minIntervalDays = sortedIntervals[0];
+    maxIntervalDays = sortedIntervals[sortedIntervals.length - 1];
+    medianIntervalDays =
+      sortedIntervals[Math.floor(sortedIntervals.length / 2)];
+    const sumIntervals = intervals.reduce((acc, v) => acc + v, 0);
+    averageIntervalDays =
+      Math.round((sumIntervals / intervals.length) * 10) / 10;
+
+    const variance =
+      intervals.reduce(
+        (acc, v) => acc + Math.pow(v - averageIntervalDays, 2),
+        0
+      ) / intervals.length;
+    const stdDev = Math.sqrt(variance);
+    const cv = averageIntervalDays > 0 ? stdDev / averageIntervalDays : 1;
+    regularityScore = Math.max(
+      10,
+      Math.min(98, Math.round((1 - Math.min(1, cv * 0.7)) * 100))
+    );
+  }
+
+  // Predict Next Occurrence
+  const lastTxDate = new Date(transactions[transactions.length - 1].dateOfAdd);
+  let predictedNextOccurrenceDate: string | null = null;
+  if (averageIntervalDays > 0) {
+    const nextDate = new Date(
+      lastTxDate.getTime() + averageIntervalDays * 24 * 60 * 60 * 1000
+    );
+    predictedNextOccurrenceDate = nextDate.toISOString().split("T")[0];
+  }
+
+  const recent3 = amounts.slice(-3);
+  const predictedNextAmount =
+    recent3.length > 0
+      ? Math.round(recent3.reduce((a, b) => a + b, 0) / recent3.length)
+      : medianAmount;
+
+  // Interval Buckets
+  const bucketRanges = [
+    { label: "1-5d", min: 0, max: 5 },
+    { label: "6-10d", min: 6, max: 10 },
+    { label: "11-15d", min: 11, max: 15 },
+    { label: "16-20d", min: 16, max: 20 },
+    { label: "21d+", min: 21, max: Infinity },
+  ];
+  const intervalBuckets: CadenceIntervalBucket[] = bucketRanges.map((b) => {
+    const count = intervals.filter((d) => d >= b.min && d <= b.max).length;
+    const percentage =
+      intervals.length > 0 ? Math.round((count / intervals.length) * 100) : 0;
+    return { label: b.label, count, percentage };
+  });
+
+  // Day-of-Month Clusters
+  let dec1Count = 0,
+    dec1Amount = 0;
+  let dec2Count = 0,
+    dec2Amount = 0;
+  let dec3Count = 0,
+    dec3Amount = 0;
+
+  const dayOfWeekCounts = [0, 0, 0, 0, 0, 0, 0];
+  const dayOfWeekAmounts = [0, 0, 0, 0, 0, 0, 0];
+  const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+  const monthlyMap = new Map<string, { amount: number; count: number }>();
+
+  const subTypeMap = new Map<
+    string,
+    { count: number; total: number; color: string; label: string }
+  >();
+  const subTypeColors: Record<string, { color: string; label: string }> = {
+    fuel: { color: "#10b981", label: "Fuel Refills" },
+    service: { color: "#f59e0b", label: "Service & Maintenance" },
+    repair: { color: "#f43f5e", label: "Repairs & Towing" },
+    care: { color: "#06b6d4", label: "Wash & Detailing" },
+    insurance: { color: "#8b5cf6", label: "Insurance & Admin" },
+    general: { color: "#64748b", label: "General Outflow" },
+  };
+
+  for (const tx of transactions) {
+    const d = new Date(tx.dateOfAdd);
+    const day = d.getDate();
+    const dow = d.getDay();
+    const amt = Number(tx.amount);
+
+    if (day <= 10) {
+      dec1Count++;
+      dec1Amount += amt;
+    } else if (day <= 20) {
+      dec2Count++;
+      dec2Amount += amt;
+    } else {
+      dec3Count++;
+      dec3Amount += amt;
+    }
+
+    dayOfWeekCounts[dow]++;
+    dayOfWeekAmounts[dow] += amt;
+
+    const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const curr = monthlyMap.get(ym) || { amount: 0, count: 0 };
+    curr.amount += amt;
+    curr.count += 1;
+    monthlyMap.set(ym, curr);
+
+    const st = classifySubType(tx.title, tx.category);
+    const stEntry = subTypeMap.get(st) || {
+      count: 0,
+      total: 0,
+      color: subTypeColors[st]?.color || "#64748b",
+      label: subTypeColors[st]?.label || st,
+    };
+    stEntry.count++;
+    stEntry.total += amt;
+    subTypeMap.set(st, stEntry);
+  }
+
+  const dayOfMonthClusters: DayOfMonthCluster[] = [
+    {
+      decade: "1st - 10th",
+      count: dec1Count,
+      totalAmount: dec1Amount,
+      percentage:
+        totalSpent > 0 ? Math.round((dec1Amount / totalSpent) * 100) : 0,
+    },
+    {
+      decade: "11th - 20th",
+      count: dec2Count,
+      totalAmount: dec2Amount,
+      percentage:
+        totalSpent > 0 ? Math.round((dec2Amount / totalSpent) * 100) : 0,
+    },
+    {
+      decade: "21st - 31st",
+      count: dec3Count,
+      totalAmount: dec3Amount,
+      percentage:
+        totalSpent > 0 ? Math.round((dec3Amount / totalSpent) * 100) : 0,
+    },
+  ];
+
+  const dayOfWeekDistribution: DayOfWeekDistribution[] = dayNames.map(
+    (name, i) => ({
+      dayName: name,
+      count: dayOfWeekCounts[i],
+      totalAmount: dayOfWeekAmounts[i],
+    })
+  );
+
+  const monthNames = [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
+  ];
+  const monthlyRunRates: MonthlySpendRunRate[] = Array.from(
+    monthlyMap.entries()
+  )
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([ym, data]) => {
+      const [year, month] = ym.split("-");
+      const label = `${monthNames[parseInt(month, 10) - 1]} ${year.slice(2)}`;
+      return {
+        yearMonth: ym,
+        label,
+        amount: data.amount,
+        count: data.count,
+      };
+    });
+
+  const subTypeBreakdown: SubTypeDecomposition[] = Array.from(
+    subTypeMap.entries()
+  ).map(([key, data]) => ({
+    subType: key,
+    label: data.label,
+    count: data.count,
+    totalAmount: data.total,
+    percentage:
+      totalSpent > 0 ? Math.round((data.total / totalSpent) * 100) : 0,
+    color: data.color,
+  }));
+
+  const result: SpendingCadenceAnalyticsResult = {
+    queryKey,
+    queryLabel,
+    totalSpent,
+    totalOccurrences: transactions.length,
+    averageAmount,
+    medianAmount,
+    minAmount,
+    maxAmount,
+    averageIntervalDays,
+    medianIntervalDays,
+    minIntervalDays,
+    maxIntervalDays,
+    regularityScore,
+    predictedNextOccurrenceDate,
+    predictedNextAmount,
+    firstOccurrenceDate: transactions[0].dateOfAdd.toISOString().split("T")[0],
+    lastOccurrenceDate: transactions[transactions.length - 1].dateOfAdd
+      .toISOString()
+      .split("T")[0],
+    occurrences: occurrences.reverse(),
+    intervalBuckets,
+    dayOfMonthClusters,
+    dayOfWeekDistribution,
+    monthlyRunRates,
+    subTypeBreakdown,
+    anomaliesCount,
+  };
+
+  cacheSet(cacheKey, result, 30000, ["analytics", "transactions"]);
+  return result;
 }

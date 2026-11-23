@@ -4,10 +4,13 @@ import {
   getCashflowAnalytics,
   getHouseAnalyticsData,
   getRentalIncomeAnalyticsData,
+  getItemSpendingCadenceAnalytics,
+  getSpendingCadenceAvailableItems,
 } from "@/lib/actions/analytics.actions";
 import { KpiCard } from "@/components/dashboard/kpi-card";
 import { CashflowAnalyticsChart } from "@/components/analytics/cashflow-analytics-chart";
 import { CategoryBarChart } from "@/components/analytics/category-bar-chart";
+import { SpendingCadenceSection } from "@/components/analytics/spending-cadence-section";
 import { HouseAnalyticsSection } from "@/components/analytics/house-analytics-section";
 import { RentalIncomeSection } from "@/components/analytics/rental-income-section";
 import { formatINR } from "@/lib/formatters";
@@ -66,31 +69,42 @@ export default async function AnalyticsPage({
         : "TIMELINE";
 
   // Single-wave parallel fetch for all page dependencies
-  const [, houses, houseAnalytics, analyticsData, rentalAnalytics] =
-    await Promise.all([
-      requireAuth(),
-      getAllHouses(),
-      getHouseAnalyticsData(currentHouseId),
-      getCashflowAnalytics({
-        houseId: currentHouseId,
-        range: currentRange,
-        startDate: currentStartDate,
-        endDate: currentEndDate,
-        mode: currentMode,
-      }),
-      getRentalIncomeAnalyticsData(rentalYear, currentHouseId),
-    ]);
+  const [
+    ,
+    houses,
+    houseAnalytics,
+    analyticsData,
+    rentalAnalytics,
+    cadenceAnalytics,
+    availableCadenceItems,
+  ] = await Promise.all([
+    requireAuth(),
+    getAllHouses(),
+    getHouseAnalyticsData(currentHouseId),
+    getCashflowAnalytics({
+      houseId: currentHouseId,
+      range: currentRange,
+      startDate: currentStartDate,
+      endDate: currentEndDate,
+      mode: currentMode,
+    }),
+    getRentalIncomeAnalyticsData(rentalYear, currentHouseId),
+    getItemSpendingCadenceAnalytics(
+      resolvedParams.cadenceItem || "black-kia",
+      currentHouseId
+    ),
+    getSpendingCadenceAvailableItems(currentHouseId),
+  ]);
 
   const { summary } = analyticsData;
   const totalFlow = summary.totalInflow + summary.totalOutflow;
   const inflowRatio =
     totalFlow > 0 ? ((summary.totalInflow / totalFlow) * 100).toFixed(1) : "0";
 
-  const hasNoData =
+  const isCompletelyEmpty =
+    houses.length === 0 &&
     summary.inflowTransactionCount === 0 &&
-    summary.outflowTransactionCount === 0 &&
-    summary.totalInflow === 0 &&
-    summary.totalOutflow === 0;
+    summary.outflowTransactionCount === 0;
 
   return (
     <div className="space-y-6">
@@ -105,7 +119,7 @@ export default async function AnalyticsPage({
         </p>
       </div>
 
-      {hasNoData ? (
+      {isCompletelyEmpty ? (
         <div className="bg-card border border-border-subtle rounded-2xl p-12 flex flex-col items-center justify-center text-neutral-400 min-h-[360px] text-center shadow-xl">
           <p className="text-sm font-medium text-neutral-300">
             No records found.
@@ -214,6 +228,15 @@ export default async function AnalyticsPage({
             selectedYear={rentalYear}
             initialViewMode={rentalView}
             currentHouseId={currentHouseId}
+          />
+
+          {/* Spending Cadence & Item Occurrence Intelligence */}
+          <SpendingCadenceSection
+            key={`${currentHouseId}-${resolvedParams.cadenceItem || "black-kia"}`}
+            initialAnalytics={cadenceAnalytics}
+            availableItems={availableCadenceItems}
+            currentHouseId={currentHouseId}
+            initialItemKey={resolvedParams.cadenceItem || "black-kia"}
           />
         </>
       )}

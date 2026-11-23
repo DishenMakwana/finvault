@@ -22,12 +22,15 @@ export async function resolveTargetHouseIds(
   });
   const allIds = allHouses.map((h) => h.id);
 
-  if (houseIdParam && houseIdParam !== "ALL") {
+  const isAllParam =
+    !houseIdParam || String(houseIdParam).trim().toUpperCase() === "ALL";
+
+  if (!isAllParam) {
     const numId =
       typeof houseIdParam === "number"
         ? houseIdParam
         : parseInt(String(houseIdParam), 10);
-    if (!isNaN(numId) && allIds.includes(numId)) {
+    if (!isNaN(numId)) {
       return {
         targetIds: [numId],
         isAll: false,
@@ -39,6 +42,6 @@ export async function resolveTargetHouseIds(
   return {
     targetIds: allIds,
     isAll: true,
-    cacheKeySegment: `houses:${allIds.join(",")}`,
+    cacheKeySegment: "houses:ALL",
   };
 }

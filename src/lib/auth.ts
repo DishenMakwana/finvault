@@ -213,7 +213,43 @@ export const getCurrentSessionId = cache(async (): Promise<number | null> => {
     if (!token) return null;
 
     const decoded = await verifyToken(token);
-    return decoded?.sessionId || null;
+    if (decoded?.sessionId) {
+      return decoded.sessionId;
+    }
+
+    // Fallback 1: match database session directly by the JWT token string
+    const dbSession = await prisma.session.findUnique({
+      where: { token },
+      select: { id: true },
+    });
+    if (dbSession) return dbSession.id;
+
+    // Fallback 2: match latest session for this authenticated user
+    if (decoded?.userId) {
+      let userAgent = "";
+      try {
+        const headersList = await headers();
+        userAgent = headersList.get("user-agent") || "";
+      } catch {}
+
+      if (userAgent) {
+        const matchingUaSession = await prisma.session.findFirst({
+          where: { userId: decoded.userId, userAgent },
+          orderBy: { createdAt: "desc" },
+          select: { id: true },
+        });
+        if (matchingUaSession) return matchingUaSession.id;
+      }
+
+      const latestSession = await prisma.session.findFirst({
+        where: { userId: decoded.userId },
+        orderBy: { createdAt: "desc" },
+        select: { id: true },
+      });
+      if (latestSession) return latestSession.id;
+    }
+
+    return null;
   } catch {
     return null;
   }

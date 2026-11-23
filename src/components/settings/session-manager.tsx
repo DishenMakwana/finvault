@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import {
   ShieldCheck,
@@ -81,6 +81,16 @@ export function SessionManager({
     null
   );
   const [isRevoking, setIsRevoking] = useState(false);
+  const [mounted, setMounted] = useState(false);
+  const [clientUa, setClientUa] = useState<string>("");
+
+  useEffect(() => {
+    setMounted(true);
+    if (typeof window !== "undefined") {
+      setClientUa(navigator.userAgent.toLowerCase());
+    }
+  }, []);
+
   const decrementActiveSessionsCount = useUserStore(
     (s) => s.decrementActiveSessionsCount
   );
@@ -136,9 +146,20 @@ export function SessionManager({
 
         <div className="space-y-3">
           {sessions.map((session, index) => {
-            const isCurrent = currentSessionId
-              ? Number(session.id) === Number(currentSessionId)
-              : index === 0;
+            let isCurrent = false;
+            if (currentSessionId != null) {
+              isCurrent = Number(session.id) === Number(currentSessionId);
+            } else if (sessions.length === 1) {
+              isCurrent = true;
+            } else if (
+              mounted &&
+              clientUa &&
+              session.userAgent?.toLowerCase() === clientUa
+            ) {
+              isCurrent = true;
+            } else {
+              isCurrent = index === 0;
+            }
             const { title, browser, formFactor } = getDeviceDisplay(session);
 
             return (
@@ -211,9 +232,14 @@ export function SessionManager({
                   </div>
                 </div>
 
-                {/* Revoke Action (Only for other devices) */}
+                {/* Revoke Action (Strictly hidden for this device, visible ONLY for other devices) */}
                 <div className="flex items-center gap-3 shrink-0">
-                  {!isCurrent && (
+                  {isCurrent ? (
+                    <span className="px-3 py-1.5 rounded-xl text-xs font-semibold text-emerald-400 bg-emerald-500/10 border border-emerald-500/20 flex items-center gap-1.5 select-none">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                      Active (This Device)
+                    </span>
+                  ) : (
                     <button
                       type="button"
                       onClick={() => setSessionToRevoke(session)}

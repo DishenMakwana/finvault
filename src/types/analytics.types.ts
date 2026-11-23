@@ -199,5 +199,99 @@ export interface AnalyticsPageProps {
     mode?: string;
     rentalYear?: string;
     rentalView?: string;
+    cadenceItem?: string;
   }>;
+}
+
+export interface CadenceOccurrence {
+  id: number;
+  date: string;
+  amount: number;
+  title: string;
+  category: string;
+  houseId: number;
+  houseName: string;
+  daysSincePrevious: number | null;
+  cumulativeTotal: number;
+  isAnomaly: boolean;
+  anomalyReason?: string;
+  subType: "fuel" | "service" | "repair" | "care" | "insurance" | "general";
+}
+
+export interface CadenceIntervalBucket {
+  label: string;
+  count: number;
+  percentage: number;
+}
+
+export interface DayOfMonthCluster {
+  decade: "1st - 10th" | "11th - 20th" | "21st - 31st";
+  count: number;
+  totalAmount: number;
+  percentage: number;
+}
+
+export interface DayOfWeekDistribution {
+  dayName: string;
+  count: number;
+  totalAmount: number;
+}
+
+export interface MonthlySpendRunRate {
+  yearMonth: string;
+  label: string;
+  amount: number;
+  count: number;
+}
+
+export interface SubTypeDecomposition {
+  subType: string;
+  label: string;
+  count: number;
+  totalAmount: number;
+  percentage: number;
+  color: string;
+}
+
+export interface SpendingCadenceAnalyticsResult {
+  queryKey: string;
+  queryLabel: string;
+  totalSpent: number;
+  totalOccurrences: number;
+  averageAmount: number;
+  medianAmount: number;
+  minAmount: number;
+  maxAmount: number;
+  averageIntervalDays: number;
+  medianIntervalDays: number;
+  minIntervalDays: number;
+  maxIntervalDays: number;
+  regularityScore: number;
+  predictedNextOccurrenceDate: string | null;
+  predictedNextAmount: number;
+  firstOccurrenceDate: string;
+  lastOccurrenceDate: string;
+  occurrences: CadenceOccurrence[];
+  intervalBuckets: CadenceIntervalBucket[];
+  dayOfMonthClusters: DayOfMonthCluster[];
+  dayOfWeekDistribution: DayOfWeekDistribution[];
+  monthlyRunRates: MonthlySpendRunRate[];
+  subTypeBreakdown: SubTypeDecomposition[];
+  anomaliesCount: number;
+}
+
+export interface SpendingCadenceAvailableItem {
+  id: string;
+  label: string;
+  count: number;
+  totalSpent: number;
+  category: string;
+  isFeatured?: boolean;
+}
+
+export interface SpendingCadenceSectionProps {
+  initialAnalytics: SpendingCadenceAnalyticsResult;
+  availableItems: SpendingCadenceAvailableItem[];
+  currentHouseId?: string;
+  initialItemKey?: string;
 }

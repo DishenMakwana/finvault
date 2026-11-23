@@ -5,6 +5,7 @@ import {
   comparePassword,
   createSession,
   getCurrentUser,
+  getCurrentSessionId,
   getActiveSessions,
   revokeSession,
   logout,
@@ -65,8 +66,17 @@ export async function revokeSessionAction(sessionId: number | string) {
   const user = await getCurrentUser();
   if (!user) return { error: "Unauthorized" };
 
+  const currentSessionId = await getCurrentSessionId();
   const id =
     typeof sessionId === "number" ? sessionId : parseInt(sessionId, 10);
+
+  if (currentSessionId && Number(currentSessionId) === id) {
+    return {
+      error:
+        "Cannot revoke active session for this device. Use Logout instead.",
+    };
+  }
+
   await revokeSession(id, user.id);
   revalidatePath("/settings");
   return { success: true };
