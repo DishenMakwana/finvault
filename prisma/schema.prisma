@@ -68,6 +68,7 @@ model House {
   repayments      LoanRepayment[]
 
   @@index([userId, deletedAt])
+  @@index([deletedAt, createdAt(sort: Asc)])
   @@map("houses")
 }
 
@@ -101,6 +102,10 @@ model Transaction {
   @@index([dateOfAdd])
   @@index([deletedAt])
   @@index([userId, isFlagged, deletedAt])
+  @@index([deletedAt, dateOfAdd(sort: Desc)])
+  @@index([deletedAt, type, dateOfAdd(sort: Desc)])
+  @@index([deletedAt, type, category, amount])
+  @@index([houseId, deletedAt, type, dateOfAdd(sort: Desc)])
   @@map("transactions")
 }
 
@@ -135,6 +140,7 @@ model Loan {
   @@index([status])
   @@index([nextPaymentDueDate])
   @@index([deletedAt])
+  @@index([deletedAt, totalAmount(sort: Desc), createdAt(sort: Desc)])
   @@map("loans")
 }
 

@@ -3,9 +3,9 @@ import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { generateTransactionsExcel } from "@/lib/excel-export";
 import { ExportTransactionItem } from "@/types/transactions.types";
-import { TransactionType } from "@prisma/client";
+import { Prisma, TransactionType } from "@prisma/client";
 
-export async function GET(req: NextRequest) {
+export async function GET(req: NextRequest): Promise<NextResponse> {
   try {
     const user = await getCurrentUser();
     if (!user) {
@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
     const endDate = searchParams.get("endDate");
     const flagged = searchParams.get("flagged");
 
-    const whereClause: any = {
+    const whereClause: Prisma.TransactionWhereInput = {
       deletedAt: null,
     };
 

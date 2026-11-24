@@ -1,6 +1,6 @@
 import { CacheItem } from "@/types/settings.types";
 
-const memoryStore = new Map<string, CacheItem<any>>();
+const memoryStore = new Map<string, CacheItem<unknown>>();
 
 export function cacheGet<T>(key: string): T | null {
   const item = memoryStore.get(key);

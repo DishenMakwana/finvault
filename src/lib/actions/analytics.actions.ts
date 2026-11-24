@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/auth";
 import { cacheGet, cacheSet, cacheInvalidateTag } from "@/lib/cache";
 import { resolveTargetHouseIds } from "@/lib/house-query";
+import type { Prisma } from "@prisma/client";
 import {
   AnalyticsFilterParams,
   CashflowAnalyticsResponse,
@@ -19,12 +20,19 @@ import {
   RentalMonthCell,
   SpendingCadenceAnalyticsResult,
   SpendingCadenceAvailableItem,
+  ExtendedCategoryAnalytics,
   CadenceOccurrence,
   CadenceIntervalBucket,
   DayOfMonthCluster,
   DayOfWeekDistribution,
   MonthlySpendRunRate,
   SubTypeDecomposition,
+  SpiritualGivingAnalyticsSummary,
+  MonthlyGivingTrajectory,
+  ShubhDenominationItem,
+  SpiritualGivingPurpose,
+  RawRentalTx,
+  ResolvedRentalPayment,
 } from "@/types/analytics.types";
 
 function formatPointLabel(d: Date): string {
@@ -90,10 +98,10 @@ function buildCategoryAnalyticsData(
     0
   );
 
-  // Sort descending by total amount
-  const sorted = Array.from(map.entries()).sort(
-    (a, b) => b[1].total - a[1].total
-  );
+  // Sort descending by total amount and take top 20
+  const sorted = Array.from(map.entries())
+    .sort((a, b) => b[1].total - a[1].total)
+    .slice(0, 20);
 
   const items: CategoryAnalyticsItem[] = sorted.map(([key, val], idx) => {
     const formattedName = key
@@ -223,14 +231,25 @@ export async function getCashflowAnalytics(
       );
     }
   } else if (range === "ALL") {
-    // Look up earliest transaction
-    const earliest = await prisma.transaction.findFirst({
-      where: { deletedAt: null },
-      orderBy: { dateOfAdd: "asc" },
-      select: { dateOfAdd: true },
-    });
-    if (earliest?.dateOfAdd) {
-      computedStart = new Date(earliest.dateOfAdd);
+    // Look up earliest transaction with local memory caching
+    const earliestCacheKey = "analytics:earliest_date";
+    let earliestDate = cacheGet<string>(earliestCacheKey);
+    if (!earliestDate) {
+      const earliest = await prisma.transaction.findFirst({
+        where: { deletedAt: null },
+        orderBy: { dateOfAdd: "asc" },
+        select: { dateOfAdd: true },
+      });
+      if (earliest?.dateOfAdd) {
+        earliestDate = earliest.dateOfAdd.toISOString();
+        cacheSet(earliestCacheKey, earliestDate, 60000, [
+          "transactions",
+          "analytics",
+        ]);
+      }
+    }
+    if (earliestDate) {
+      computedStart = new Date(earliestDate);
       computedStart.setHours(0, 0, 0, 0);
     } else {
       computedStart = new Date(computedEnd.getFullYear(), 0, 1, 0, 0, 0, 0);
@@ -238,7 +257,7 @@ export async function getCashflowAnalytics(
   }
 
   // Build where filter: when isAll, include all non-deleted transactions across all houses
-  const where: any = {
+  const where: Prisma.TransactionWhereInput = {
     deletedAt: null,
     ...(isAll ? {} : { houseId: { in: targetIds } }),
     dateOfAdd: {
@@ -247,24 +266,40 @@ export async function getCashflowAnalytics(
     },
   };
 
-  // Fetch transactions with selective projection
-  const transactions = await prisma.transaction.findMany({
-    where,
-    select: {
-      id: true,
-      type: true,
-      amount: true,
-      title: true,
-      category: true,
-      dateOfAdd: true,
-      house: {
-        select: {
-          name: true,
+  // Complete category scope across house(s) to ensure full, accurate category totals matching Transactions page
+  const categoryWhere: Prisma.TransactionWhereInput = {
+    deletedAt: null,
+    ...(isAll ? {} : { houseId: { in: targetIds } }),
+  };
+
+  // Fetch timeline transactions and complete category transactions in parallel
+  const [transactions, allCategoryTxs] = await Promise.all([
+    prisma.transaction.findMany({
+      where,
+      select: {
+        id: true,
+        type: true,
+        amount: true,
+        title: true,
+        category: true,
+        dateOfAdd: true,
+        house: {
+          select: {
+            name: true,
+          },
         },
       },
-    },
-    orderBy: { dateOfAdd: "asc" },
-  });
+      orderBy: { dateOfAdd: "asc" },
+    }),
+    prisma.transaction.findMany({
+      where: categoryWhere,
+      select: {
+        category: true,
+        amount: true,
+        type: true,
+      },
+    }),
+  ]);
 
   // Group transactions by YYYY-MM-DD
   const txByDate = new Map<string, AnalyticsTransactionItem[]>();
@@ -375,8 +410,8 @@ export async function getCashflowAnalytics(
     });
   }
 
-  // Category Analytics Calculations
-  const rawTxList = transactions.map((t) => ({
+  // Category Analytics Calculations (Complete category totals matching Transactions page)
+  const rawTxList = allCategoryTxs.map((t) => ({
     category: t.category,
     amount: Number(t.amount),
     type: t.type,
@@ -829,22 +864,13 @@ export async function getRentalIncomeAnalyticsData(
     });
   });
 
-  interface RawTx {
-    id: number;
-    title: string;
-    amount: number;
-    date: Date;
-    houseId?: number;
-    houseName?: string;
-  }
-
   const unitMetadataMap = new Map<
     string,
     {
       houseId?: number;
       houseName?: string;
-      allTx: RawTx[];
-      yearTx: RawTx[];
+      allTx: RawRentalTx[];
+      yearTx: RawRentalTx[];
     }
   >();
 
@@ -865,7 +891,7 @@ export async function getRentalIncomeAnalyticsData(
     }
 
     const txYear = new Date(tx.dateOfAdd).getFullYear();
-    const rawTx: RawTx = {
+    const rawTx: RawRentalTx = {
       id: tx.id,
       title: tx.title,
       amount: Number(tx.amount),
@@ -908,14 +934,6 @@ export async function getRentalIncomeAnalyticsData(
     unitExpectedRentMap.set(unitName, yearRate || overallRate || 0);
   });
 
-  interface ResolvedPayment {
-    amount: number;
-    txId: number;
-    txDate: string;
-    txTitle: string;
-    coveredMonths: number[];
-  }
-
   const sortedUnitNames = Array.from(unitMetadataMap.keys()).sort();
   const unitSummaries: RentalUnitSummary[] = [];
   let totalAnnualCollected = 0;
@@ -928,7 +946,7 @@ export async function getRentalIncomeAnalyticsData(
     const meta = unitMetadataMap.get(unitName)!;
     const expectedMonthlyRent = unitExpectedRentMap.get(unitName) || 0;
 
-    const payments: ResolvedPayment[] = meta.yearTx.map((tx) => {
+    const payments: ResolvedRentalPayment[] = meta.yearTx.map((tx) => {
       const covered = resolveCoveredMonths(
         tx.title,
         tx.date,
@@ -1259,67 +1277,62 @@ export async function getSpendingCadenceAvailableItems(
 
   const houseFilter = isAll ? {} : { houseId: { in: targetIds } };
 
-  // 1. Check Black Kia count & total across target house(s) (never restricted by userId)
-  const [kiaCount, kiaSum] = await Promise.all([
-    prisma.transaction.count({
-      where: {
-        type: "OUTFLOW",
-        deletedAt: null,
-        ...houseFilter,
-        OR: [
-          { title: { contains: "Black Kia", mode: "insensitive" } },
-          { title: { contains: "Kia", mode: "insensitive" } },
-        ],
-      },
-    }),
-    prisma.transaction.aggregate({
-      where: {
-        type: "OUTFLOW",
-        deletedAt: null,
-        ...houseFilter,
-        OR: [
-          { title: { contains: "Black Kia", mode: "insensitive" } },
-          { title: { contains: "Kia", mode: "insensitive" } },
-        ],
-      },
-      _sum: { amount: true },
-    }),
-  ]);
-
-  // 2. Check White Kia count & total across target house(s) (never restricted by userId)
-  const [whiteKiaCount, whiteKiaSum] = await Promise.all([
-    prisma.transaction.count({
-      where: {
-        type: "OUTFLOW",
-        deletedAt: null,
-        ...houseFilter,
-        title: { contains: "White Kia", mode: "insensitive" },
-      },
-    }),
-    prisma.transaction.aggregate({
-      where: {
-        type: "OUTFLOW",
-        deletedAt: null,
-        ...houseFilter,
-        title: { contains: "White Kia", mode: "insensitive" },
-      },
-      _sum: { amount: true },
-    }),
-  ]);
-
-  // 3. Top categories with outflow transactions across target house(s) (never restricted by userId)
-  const categories = await prisma.transaction.groupBy({
-    by: ["category"],
-    where: {
-      type: "OUTFLOW",
-      deletedAt: null,
-      ...houseFilter,
-    },
-    _count: { _all: true },
-    _sum: { amount: true },
-    orderBy: { _count: { category: "desc" } },
-    take: 12,
-  });
+  // Concurrently fetch Black Kia stats, White Kia stats, and top categories in one parallel wave
+  const [kiaCount, kiaSum, whiteKiaCount, whiteKiaSum, categories] =
+    await Promise.all([
+      prisma.transaction.count({
+        where: {
+          type: "OUTFLOW",
+          deletedAt: null,
+          ...houseFilter,
+          OR: [
+            { title: { contains: "Black Kia", mode: "insensitive" } },
+            { title: { contains: "Kia", mode: "insensitive" } },
+          ],
+        },
+      }),
+      prisma.transaction.aggregate({
+        where: {
+          type: "OUTFLOW",
+          deletedAt: null,
+          ...houseFilter,
+          OR: [
+            { title: { contains: "Black Kia", mode: "insensitive" } },
+            { title: { contains: "Kia", mode: "insensitive" } },
+          ],
+        },
+        _sum: { amount: true },
+      }),
+      prisma.transaction.count({
+        where: {
+          type: "OUTFLOW",
+          deletedAt: null,
+          ...houseFilter,
+          title: { contains: "White Kia", mode: "insensitive" },
+        },
+      }),
+      prisma.transaction.aggregate({
+        where: {
+          type: "OUTFLOW",
+          deletedAt: null,
+          ...houseFilter,
+          title: { contains: "White Kia", mode: "insensitive" },
+        },
+        _sum: { amount: true },
+      }),
+      prisma.transaction.groupBy({
+        by: ["category"],
+        where: {
+          type: "OUTFLOW",
+          deletedAt: null,
+          ...houseFilter,
+        },
+        _count: { _all: true },
+        _sum: { amount: true },
+        orderBy: { _count: { category: "desc" } },
+        take: 12,
+      }),
+    ]);
 
   const items: SpendingCadenceAvailableItem[] = [];
 
@@ -1360,6 +1373,374 @@ export async function getSpendingCadenceAvailableItems(
   return items;
 }
 
+const EMPTY_EXTENDED_INTELLIGENCE: ExtendedCategoryAnalytics = {
+  velocity: {
+    currentMonthTotal: 0,
+    daysElapsedInMonth: 1,
+    totalDaysInMonth: 30,
+    currentDailyBurnRate: 0,
+    projectedMonthEndSpend: 0,
+    baselineMonthlySpend: 0,
+    velocityPacingPercentage: 0,
+    status: "CADENCE_ESTIMATED",
+    mode: "CADENCE_ESTIMATED",
+    cadenceExpectedMonthly: 0,
+    cadenceIntervalDays: 0,
+  },
+  volatility: {
+    standardDeviation: 0,
+    meanAmount: 0,
+    coefficientOfVariation: 0,
+    classification: "ELASTIC",
+    fixedBaselineAmount: 0,
+    volatilityScore: 0,
+  },
+  anomalies: [],
+  pareto: {
+    topDrivers: [],
+    tailSpendTotal: 0,
+    tailSpendPercentage: 0,
+    tailSpendCount: 0,
+    top20PercentSpendShare: 0,
+  },
+  temporalHeatmap: [],
+  microBleed: {
+    threshold: 1000,
+    totalBleedAmount: 0,
+    totalBleedCount: 0,
+    percentageOfCategoryTotal: 0,
+    topMicroTitles: [],
+  },
+};
+
+function computeExtendedCategoryAnalytics(
+  transactions: {
+    id: number;
+    amount: number | string | Prisma.Decimal;
+    title: string;
+    dateOfAdd: Date;
+  }[],
+  totalSpent: number,
+  medianAmount: number,
+  averageIntervalDays: number = 0
+): ExtendedCategoryAnalytics {
+  if (transactions.length === 0) return EMPTY_EXTENDED_INTELLIGENCE;
+
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth();
+  const totalDaysInMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+  const daysElapsedInMonth = Math.max(1, now.getDate());
+
+  // 1. Velocity & Burn Pacing
+  let currentMonthTotal = 0;
+  const monthlyTotalsMap = new Map<string, number>();
+
+  transactions.forEach((tx) => {
+    const val = Number(tx.amount);
+    const d = new Date(tx.dateOfAdd);
+    const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    monthlyTotalsMap.set(ym, (monthlyTotalsMap.get(ym) || 0) + val);
+
+    if (d.getFullYear() === currentYear && d.getMonth() === currentMonth) {
+      currentMonthTotal += val;
+    }
+  });
+
+  // Baseline monthly spend from previous historical months
+  const previousMonthsTotals: number[] = [];
+  monthlyTotalsMap.forEach((amt, ym) => {
+    const [y, m] = ym.split("-").map(Number);
+    if (y < currentYear || (y === currentYear && m - 1 < currentMonth)) {
+      previousMonthsTotals.push(amt);
+    }
+  });
+
+  let baselineMonthlySpend = 0;
+  if (previousMonthsTotals.length > 0) {
+    previousMonthsTotals.sort((a, b) => a - b);
+    baselineMonthlySpend =
+      previousMonthsTotals[Math.floor(previousMonthsTotals.length / 2)];
+  } else {
+    baselineMonthlySpend =
+      currentMonthTotal > 0
+        ? currentMonthTotal
+        : Math.round(totalSpent / Math.max(1, monthlyTotalsMap.size));
+  }
+
+  // Cadence Expected Monthly Run-Rate
+  const cadenceExpectedMonthly =
+    averageIntervalDays > 0
+      ? Math.round((30.4 / averageIntervalDays) * medianAmount)
+      : baselineMonthlySpend;
+
+  let currentDailyBurnRate = 0;
+  let projectedMonthEndSpend = 0;
+  let velocityPacingPercentage = 0;
+  let pacingStatus:
+    "SLOW" | "NORMAL" | "ACCELERATED" | "OVERHEATING" | "CADENCE_ESTIMATED" =
+    "NORMAL";
+  let mode: "LIVE_MTD" | "CADENCE_ESTIMATED" = "LIVE_MTD";
+
+  if (currentMonthTotal > 0) {
+    // Current month has recorded transactions: compute live MTD pacing
+    mode = "LIVE_MTD";
+    currentDailyBurnRate = Math.round(currentMonthTotal / daysElapsedInMonth);
+    projectedMonthEndSpend = currentDailyBurnRate * totalDaysInMonth;
+
+    if (baselineMonthlySpend > 0) {
+      velocityPacingPercentage = Math.round(
+        ((projectedMonthEndSpend - baselineMonthlySpend) /
+          baselineMonthlySpend) *
+          100
+      );
+    }
+
+    if (velocityPacingPercentage > 35) pacingStatus = "OVERHEATING";
+    else if (velocityPacingPercentage > 12) pacingStatus = "ACCELERATED";
+    else if (velocityPacingPercentage < -15) pacingStatus = "SLOW";
+    else pacingStatus = "NORMAL";
+  } else {
+    // Current month has 0 transactions so far: apply Smart Cadence Fallback
+    mode = "CADENCE_ESTIMATED";
+    pacingStatus = "CADENCE_ESTIMATED";
+    projectedMonthEndSpend =
+      cadenceExpectedMonthly > 0
+        ? cadenceExpectedMonthly
+        : baselineMonthlySpend;
+    currentDailyBurnRate = Math.round(projectedMonthEndSpend / 30.4);
+
+    if (baselineMonthlySpend > 0 && projectedMonthEndSpend > 0) {
+      velocityPacingPercentage = Math.round(
+        ((projectedMonthEndSpend - baselineMonthlySpend) /
+          baselineMonthlySpend) *
+          100
+      );
+    }
+  }
+
+  // 2. Volatility & Predictability Classification
+  const n = transactions.length;
+  const meanAmount = n > 0 ? totalSpent / n : 0;
+  let varianceSum = 0;
+  transactions.forEach((tx) => {
+    const diff = Number(tx.amount) - meanAmount;
+    varianceSum += diff * diff;
+  });
+  const standardDeviation = n > 1 ? Math.sqrt(varianceSum / n) : 0;
+  const coefficientOfVariation =
+    meanAmount > 0 ? Number((standardDeviation / meanAmount).toFixed(2)) : 0;
+
+  let classification: "FIXED" | "ELASTIC" | "WILDCARD" = "ELASTIC";
+  if (coefficientOfVariation < 0.35) classification = "FIXED";
+  else if (coefficientOfVariation > 0.85) classification = "WILDCARD";
+
+  const volatilityScore = Math.min(
+    100,
+    Math.round(coefficientOfVariation * 100)
+  );
+  const fixedBaselineAmount =
+    classification === "FIXED"
+      ? Math.round(medianAmount)
+      : Math.round(meanAmount * 0.7);
+
+  // 3. Statistical Anomalies (Z-score & Outlier Detection)
+  const anomalies: ExtendedCategoryAnalytics["anomalies"] = [];
+  transactions.forEach((tx) => {
+    const val = Number(tx.amount);
+    const zScore =
+      standardDeviation > 0
+        ? Number(((val - meanAmount) / standardDeviation).toFixed(2))
+        : 0;
+    const multiplierVsMedian =
+      medianAmount > 0 ? Number((val / medianAmount).toFixed(1)) : 1;
+    if (zScore >= 1.75 || (multiplierVsMedian >= 2.2 && val > 1500)) {
+      anomalies.push({
+        id: tx.id,
+        title: tx.title,
+        amount: val,
+        date: tx.dateOfAdd.toISOString().split("T")[0],
+        zScore,
+        multiplierVsMedian,
+        isFlagged: true,
+      });
+    }
+  });
+  anomalies.sort((a, b) => b.amount - a.amount);
+  const topAnomalies = anomalies.slice(0, 5);
+
+  // 4. Pareto 80/20 Driver Analysis
+  const titleMap = new Map<string, { total: number; count: number }>();
+  transactions.forEach((tx) => {
+    const cleanTitle = (tx.title || "General Outflow").trim();
+    const curr = titleMap.get(cleanTitle) || { total: 0, count: 0 };
+    curr.total += Number(tx.amount);
+    curr.count += 1;
+    titleMap.set(cleanTitle, curr);
+  });
+
+  const sortedTitles = Array.from(titleMap.entries())
+    .map(([name, data]) => ({
+      name,
+      amount: data.total,
+      count: data.count,
+      percentage:
+        totalSpent > 0 ? Math.round((data.total / totalSpent) * 100) : 0,
+    }))
+    .sort((a, b) => b.amount - a.amount);
+
+  let runningCum = 0;
+  const topDrivers = sortedTitles.slice(0, 4).map((d) => {
+    runningCum += d.amount;
+    return {
+      name: d.name,
+      amount: d.amount,
+      percentage: d.percentage,
+      cumulativePercentage:
+        totalSpent > 0 ? Math.round((runningCum / totalSpent) * 100) : 0,
+      transactionCount: d.count,
+    };
+  });
+
+  const topDriversTotal = topDrivers.reduce((acc, d) => acc + d.amount, 0);
+  const tailSpendTotal = Math.max(0, totalSpent - topDriversTotal);
+  const tailSpendPercentage =
+    totalSpent > 0 ? Math.round((tailSpendTotal / totalSpent) * 100) : 0;
+  const tailSpendCount = Math.max(
+    0,
+    n - topDrivers.reduce((acc, d) => acc + d.transactionCount, 0)
+  );
+
+  const sortedTxAmounts = transactions
+    .map((t) => Number(t.amount))
+    .sort((a, b) => b - a);
+  const top20Count = Math.max(1, Math.ceil(n * 0.2));
+  const top20Sum = sortedTxAmounts
+    .slice(0, top20Count)
+    .reduce((acc, v) => acc + v, 0);
+  const top20PercentSpendShare =
+    totalSpent > 0 ? Math.round((top20Sum / totalSpent) * 100) : 0;
+
+  // 5. Temporal Day-of-Week & Decade Heatmap (7 days x 3 decades)
+  const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const decades: ("EARLY" | "MID" | "LATE")[] = ["EARLY", "MID", "LATE"];
+
+  const heatCellsMap = new Map<string, { amount: number; count: number }>();
+  for (let dow = 0; dow < 7; dow++) {
+    for (const dec of decades) {
+      heatCellsMap.set(`${dow}_${dec}`, { amount: 0, count: 0 });
+    }
+  }
+
+  transactions.forEach((tx) => {
+    const d = new Date(tx.dateOfAdd);
+    const dow = d.getDay();
+    const dayOfMonth = d.getDate();
+    const dec: "EARLY" | "MID" | "LATE" =
+      dayOfMonth <= 10 ? "EARLY" : dayOfMonth <= 20 ? "MID" : "LATE";
+    const key = `${dow}_${dec}`;
+    const cell = heatCellsMap.get(key) || { amount: 0, count: 0 };
+    cell.amount += Number(tx.amount);
+    cell.count += 1;
+    heatCellsMap.set(key, cell);
+  });
+
+  let maxCellAmount = 0;
+  heatCellsMap.forEach((v) => {
+    if (v.amount > maxCellAmount) maxCellAmount = v.amount;
+  });
+
+  const temporalHeatmap: ExtendedCategoryAnalytics["temporalHeatmap"] = [];
+  for (let dow = 0; dow < 7; dow++) {
+    for (const dec of decades) {
+      const data = heatCellsMap.get(`${dow}_${dec}`) || { amount: 0, count: 0 };
+      let intensity: 0 | 1 | 2 | 3 | 4 = 0;
+      if (data.amount > 0 && maxCellAmount > 0) {
+        const ratio = data.amount / maxCellAmount;
+        if (ratio >= 0.75) intensity = 4;
+        else if (ratio >= 0.5) intensity = 3;
+        else if (ratio >= 0.25) intensity = 2;
+        else intensity = 1;
+      }
+      temporalHeatmap.push({
+        dayOfWeek: dow,
+        dayName: dayNames[dow],
+        decade: dec,
+        amount: data.amount,
+        count: data.count,
+        intensity,
+      });
+    }
+  }
+
+  // 6. Micro-Outflow Bleed Tracker (Spends <= ₹1,000)
+  const microThreshold = 1000;
+  const microTxs = transactions.filter(
+    (t) => Number(t.amount) <= microThreshold
+  );
+  const totalBleedAmount = microTxs.reduce(
+    (acc, t) => acc + Number(t.amount),
+    0
+  );
+  const totalBleedCount = microTxs.length;
+  const percentageOfCategoryTotal =
+    totalSpent > 0 ? Math.round((totalBleedAmount / totalSpent) * 100) : 0;
+
+  const microTitleMap = new Map<string, { count: number; total: number }>();
+  microTxs.forEach((t) => {
+    const cleanTitle = (t.title || "Quick Spend").trim();
+    const curr = microTitleMap.get(cleanTitle) || { count: 0, total: 0 };
+    curr.count += 1;
+    curr.total += Number(t.amount);
+    microTitleMap.set(cleanTitle, curr);
+  });
+
+  const topMicroTitles = Array.from(microTitleMap.entries())
+    .map(([title, d]) => ({ title, count: d.count, total: d.total }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 3);
+
+  return {
+    velocity: {
+      currentMonthTotal,
+      daysElapsedInMonth,
+      totalDaysInMonth,
+      currentDailyBurnRate,
+      projectedMonthEndSpend,
+      baselineMonthlySpend,
+      velocityPacingPercentage,
+      status: pacingStatus,
+      mode,
+      cadenceExpectedMonthly,
+      cadenceIntervalDays: averageIntervalDays,
+    },
+    volatility: {
+      standardDeviation,
+      meanAmount,
+      coefficientOfVariation,
+      classification,
+      fixedBaselineAmount,
+      volatilityScore,
+    },
+    anomalies: topAnomalies,
+    pareto: {
+      topDrivers,
+      tailSpendTotal,
+      tailSpendPercentage,
+      tailSpendCount,
+      top20PercentSpendShare,
+    },
+    temporalHeatmap,
+    microBleed: {
+      threshold: microThreshold,
+      totalBleedAmount,
+      totalBleedCount,
+      percentageOfCategoryTotal,
+      topMicroTitles,
+    },
+  };
+}
+
 export async function getItemSpendingCadenceAnalytics(
   queryKey: string = "black-kia",
   houseId?: string | number
@@ -1391,6 +1772,7 @@ export async function getItemSpendingCadenceAnalytics(
       monthlyRunRates: [],
       subTypeBreakdown: [],
       anomaliesCount: 0,
+      extendedIntelligence: EMPTY_EXTENDED_INTELLIGENCE,
     };
   }
 
@@ -1401,7 +1783,7 @@ export async function getItemSpendingCadenceAnalytics(
   const cached = cacheGet<SpendingCadenceAnalyticsResult>(cacheKey);
   if (cached) return cached;
 
-  const whereClause: any = {
+  const whereClause: Prisma.TransactionWhereInput = {
     type: "OUTFLOW",
     deletedAt: null,
     ...(isAll ? {} : { houseId: { in: targetIds } }),
@@ -1462,6 +1844,7 @@ export async function getItemSpendingCadenceAnalytics(
       monthlyRunRates: [],
       subTypeBreakdown: [],
       anomaliesCount: 0,
+      extendedIntelligence: EMPTY_EXTENDED_INTELLIGENCE,
     };
     cacheSet(cacheKey, emptyResult, 30000, ["analytics", "transactions"]);
     return emptyResult;
@@ -1737,6 +2120,13 @@ export async function getItemSpendingCadenceAnalytics(
     color: data.color,
   }));
 
+  const extendedIntelligence = computeExtendedCategoryAnalytics(
+    transactions,
+    totalSpent,
+    medianAmount,
+    averageIntervalDays
+  );
+
   const result: SpendingCadenceAnalyticsResult = {
     queryKey,
     queryLabel,
@@ -1764,6 +2154,479 @@ export async function getItemSpendingCadenceAnalytics(
     monthlyRunRates,
     subTypeBreakdown,
     anomaliesCount,
+    extendedIntelligence,
+  };
+
+  cacheSet(cacheKey, result, 30000, ["analytics", "transactions"]);
+  return result;
+}
+
+const EMPTY_SPIRITUAL_ANALYTICS: SpiritualGivingAnalyticsSummary = {
+  totalSpiritualOutflow: 0,
+  totalEventsCount: 0,
+  givingRatioOfOutflow: 0,
+  givingRatioOfInflow: 0,
+  bhogTotal: 0,
+  bhogCount: 0,
+  bhogPercentage: 0,
+  donationTotal: 0,
+  donationCount: 0,
+  donationPercentage: 0,
+  averageDonationTicket: 0,
+  medianTicketSize: 0,
+  activeGivingStreakMonths: 0,
+  festiveOutflowTotal: 0,
+  festiveOutflowPercentage: 0,
+  routineOutflowTotal: 0,
+  monthlyTrajectory: [],
+  shubhDenominations: [],
+  purposeBreakdown: [],
+  recentGivingEvents: [],
+};
+
+function isAuspiciousAmount(amt: number): boolean {
+  if (amt === 111111 || amt === 108 || amt === 1008) return true;
+  if (amt % 100 === 1 || amt % 1000 === 100) return true;
+  if ([501, 1001, 1100, 2100, 5100, 11000, 21000, 51000, 101000].includes(amt))
+    return true;
+  if (amt >= 1000 && amt % 1000 === 0) return true;
+  if (amt >= 500 && amt % 500 === 0) return true;
+  return false;
+}
+
+export async function getSpiritualGivingAnalytics(
+  houseId?: string | number
+): Promise<SpiritualGivingAnalyticsSummary> {
+  const user = await getCurrentUser();
+  if (!user) {
+    return EMPTY_SPIRITUAL_ANALYTICS;
+  }
+
+  const { targetIds, isAll, cacheKeySegment } =
+    await resolveTargetHouseIds(houseId);
+
+  const cacheKey = `spiritual:${cacheKeySegment}`;
+  const cached = cacheGet<SpiritualGivingAnalyticsSummary>(cacheKey);
+  if (cached) return cached;
+
+  const whereClause: Prisma.TransactionWhereInput = {
+    deletedAt: null,
+    type: "OUTFLOW",
+    OR: [
+      { category: { equals: "bhog", mode: "insensitive" } },
+      { category: { equals: "donation", mode: "insensitive" } },
+    ],
+    ...(isAll ? {} : { houseId: { in: targetIds } }),
+  };
+
+  const [spiritualTxs, totalOutflowAgg, totalInflowAgg] = await Promise.all([
+    prisma.transaction.findMany({
+      where: whereClause,
+      select: {
+        id: true,
+        title: true,
+        category: true,
+        amount: true,
+        dateOfAdd: true,
+        houseId: true,
+      },
+      orderBy: { dateOfAdd: "asc" },
+    }),
+    prisma.transaction.aggregate({
+      where: {
+        deletedAt: null,
+        type: "OUTFLOW",
+        ...(isAll ? {} : { houseId: { in: targetIds } }),
+      },
+      _sum: { amount: true },
+    }),
+    prisma.transaction.aggregate({
+      where: {
+        deletedAt: null,
+        type: "INFLOW",
+        ...(isAll ? {} : { houseId: { in: targetIds } }),
+      },
+      _sum: { amount: true },
+    }),
+  ]);
+
+  if (spiritualTxs.length === 0) {
+    cacheSet(cacheKey, EMPTY_SPIRITUAL_ANALYTICS, 30000, [
+      "analytics",
+      "transactions",
+    ]);
+    return EMPTY_SPIRITUAL_ANALYTICS;
+  }
+
+  const totalPortfolioOutflow = totalOutflowAgg._sum.amount
+    ? Number(totalOutflowAgg._sum.amount)
+    : 0;
+  const totalPortfolioInflow = totalInflowAgg._sum.amount
+    ? Number(totalInflowAgg._sum.amount)
+    : 0;
+
+  let totalSpiritualOutflow = 0;
+  let bhogTotal = 0;
+  let bhogCount = 0;
+  let donationTotal = 0;
+  let donationCount = 0;
+  let festiveOutflowTotal = 0;
+
+  const amounts: number[] = [];
+  const monthlyMap = new Map<
+    string,
+    { bhog: number; donation: number; total: number; count: number }
+  >();
+
+  // Purpose buckets
+  let annadanamTotal = 0;
+  let annadanamCount = 0;
+  let templeTrustTotal = 0;
+  let templeTrustCount = 0;
+  let jivaDayaTotal = 0;
+  let jivaDayaCount = 0;
+  let socialAidTotal = 0;
+  let socialAidCount = 0;
+  let generalDaanTotal = 0;
+  let generalDaanCount = 0;
+
+  // Shubh buckets
+  const shubhBuckets = {
+    mahaDaan: {
+      label: "₹1,11,111 (Maha Daan)",
+      count: 0,
+      total: 0,
+      min: 111111,
+      max: 111111,
+    },
+    tier1: {
+      label: "₹20,000 - ₹50,000 (Major Seva)",
+      count: 0,
+      total: 0,
+      min: 20000,
+      max: 50000,
+    },
+    tier2: {
+      label: "₹10,000 - ₹19,999 (Annadanam/Katha)",
+      count: 0,
+      total: 0,
+      min: 10000,
+      max: 19999,
+    },
+    tier3: {
+      label: "₹5,000 - ₹9,999 (Monthly Seva Trust)",
+      count: 0,
+      total: 0,
+      min: 5000,
+      max: 9999,
+    },
+    tier4: {
+      label: "₹1,000 - ₹4,999 (Ritual Offerings)",
+      count: 0,
+      total: 0,
+      min: 1000,
+      max: 4999,
+    },
+    tier5: {
+      label: "< ₹1,000 (Dakshina & Daily Puja)",
+      count: 0,
+      total: 0,
+      min: 0,
+      max: 999,
+    },
+  };
+
+  const festiveMonths = [2, 7, 8, 9, 10]; // Mar (Chaitra), Aug (Shravan), Sep (Ganesh/Navratri), Oct (Diwali), Nov (Annakut)
+
+  for (const tx of spiritualTxs) {
+    const amt = Number(tx.amount);
+    totalSpiritualOutflow += amt;
+    amounts.push(amt);
+
+    const isBhog = tx.category.toLowerCase().includes("bhog");
+    if (isBhog) {
+      bhogTotal += amt;
+      bhogCount++;
+    } else {
+      donationTotal += amt;
+      donationCount++;
+    }
+
+    const d = new Date(tx.dateOfAdd);
+    if (festiveMonths.includes(d.getMonth())) {
+      festiveOutflowTotal += amt;
+    }
+
+    // Monthly aggregation
+    const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    const curr = monthlyMap.get(ym) || {
+      bhog: 0,
+      donation: 0,
+      total: 0,
+      count: 0,
+    };
+    if (isBhog) {
+      curr.bhog += amt;
+    } else {
+      curr.donation += amt;
+    }
+    curr.total += amt;
+    curr.count++;
+    monthlyMap.set(ym, curr);
+
+    // Purpose decomposition
+    const titleLower = tx.title.toLowerCase();
+    if (
+      /bhojan|nasto|dinner|lunch|caterer|food|prasad|farshan|gundi|gathiya|mango|tiffin|bhandara/.test(
+        titleLower
+      )
+    ) {
+      annadanamTotal += amt;
+      annadanamCount++;
+    } else if (
+      /om shanti|trust|sitaram|mandir|temple|raja deva|tithi|katha|shiv/.test(
+        titleLower
+      )
+    ) {
+      templeTrustTotal += amt;
+      templeTrustCount++;
+    } else if (/cow|grass|gau|bird|chan|animal|pashu/.test(titleLower)) {
+      jivaDayaTotal += amt;
+      jivaDayaCount++;
+    } else if (
+      /children|girls|boys|office boys|student|shradhanjali|aid|school/.test(
+        titleLower
+      )
+    ) {
+      socialAidTotal += amt;
+      socialAidCount++;
+    } else {
+      generalDaanTotal += amt;
+      generalDaanCount++;
+    }
+
+    // Shubh bucket assignment
+    if (amt >= 111111) {
+      shubhBuckets.mahaDaan.count++;
+      shubhBuckets.mahaDaan.total += amt;
+    } else if (amt >= 20000) {
+      shubhBuckets.tier1.count++;
+      shubhBuckets.tier1.total += amt;
+    } else if (amt >= 10000) {
+      shubhBuckets.tier2.count++;
+      shubhBuckets.tier2.total += amt;
+    } else if (amt >= 5000) {
+      shubhBuckets.tier3.count++;
+      shubhBuckets.tier3.total += amt;
+    } else if (amt >= 1000) {
+      shubhBuckets.tier4.count++;
+      shubhBuckets.tier4.total += amt;
+    } else {
+      shubhBuckets.tier5.count++;
+      shubhBuckets.tier5.total += amt;
+    }
+  }
+
+  // Median ticket size
+  amounts.sort((a, b) => a - b);
+  const medianTicketSize =
+    amounts.length > 0
+      ? amounts.length % 2 === 0
+        ? Math.round(
+            (amounts[amounts.length / 2 - 1] + amounts[amounts.length / 2]) / 2
+          )
+        : amounts[Math.floor(amounts.length / 2)]
+      : 0;
+
+  const averageDonationTicket =
+    spiritualTxs.length > 0
+      ? Math.round(totalSpiritualOutflow / spiritualTxs.length)
+      : 0;
+
+  const givingRatioOfOutflow =
+    totalPortfolioOutflow > 0
+      ? Math.round((totalSpiritualOutflow / totalPortfolioOutflow) * 1000) / 10
+      : 0;
+
+  const givingRatioOfInflow =
+    totalPortfolioInflow > 0
+      ? Math.round((totalSpiritualOutflow / totalPortfolioInflow) * 1000) / 10
+      : 0;
+
+  const bhogPercentage =
+    totalSpiritualOutflow > 0
+      ? Math.round((bhogTotal / totalSpiritualOutflow) * 100)
+      : 0;
+  const donationPercentage =
+    totalSpiritualOutflow > 0
+      ? Math.round((donationTotal / totalSpiritualOutflow) * 100)
+      : 0;
+
+  const routineOutflowTotal = Math.max(
+    0,
+    totalSpiritualOutflow - festiveOutflowTotal
+  );
+  const festiveOutflowPercentage =
+    totalSpiritualOutflow > 0
+      ? Math.round((festiveOutflowTotal / totalSpiritualOutflow) * 100)
+      : 0;
+
+  // Monthly trajectory
+  const monthNames = [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
+  ];
+  const sortedMonths = Array.from(monthlyMap.keys()).sort();
+  const monthlyTrajectory: MonthlyGivingTrajectory[] = sortedMonths.map(
+    (ym) => {
+      const data = monthlyMap.get(ym)!;
+      const [y, m] = ym.split("-");
+      const label = `${monthNames[parseInt(m, 10) - 1]} '${y.slice(2)}`;
+      return {
+        yearMonth: ym,
+        label,
+        bhogAmount: data.bhog,
+        donationAmount: data.donation,
+        totalAmount: data.total,
+        eventCount: data.count,
+      };
+    }
+  );
+
+  // Active giving streak (longest consecutive calendar months)
+  let maxStreak = 0;
+  let currentStreak = 0;
+  if (sortedMonths.length > 0) {
+    maxStreak = 1;
+    currentStreak = 1;
+    for (let i = 1; i < sortedMonths.length; i++) {
+      const [prevY, prevM] = sortedMonths[i - 1].split("-").map(Number);
+      const [currY, currM] = sortedMonths[i].split("-").map(Number);
+      const diffMonths = (currY - prevY) * 12 + (currM - prevM);
+      if (diffMonths === 1) {
+        currentStreak++;
+        if (currentStreak > maxStreak) {
+          maxStreak = currentStreak;
+        }
+      } else {
+        currentStreak = 1;
+      }
+    }
+  }
+
+  // Shubh denominations
+  const shubhDenominations: ShubhDenominationItem[] = Object.values(
+    shubhBuckets
+  )
+    .filter((b) => b.count > 0)
+    .map((b) => ({
+      amount: b.total,
+      label: b.label,
+      count: b.count,
+      total: b.total,
+      percentage:
+        totalSpiritualOutflow > 0
+          ? Math.round((b.total / totalSpiritualOutflow) * 100)
+          : 0,
+    }));
+
+  // Purpose breakdown
+  const rawPurposes = [
+    {
+      purpose: "ANNADANAM" as const,
+      label: "Annadanam & Prasad Bhojan",
+      amount: annadanamTotal,
+      count: annadanamCount,
+      color: "#F59E0B",
+    },
+    {
+      purpose: "TEMPLE_TRUST" as const,
+      label: "Temple & Spiritual Trusts",
+      amount: templeTrustTotal,
+      count: templeTrustCount,
+      color: "#818CF8",
+    },
+    {
+      purpose: "JIVA_DAYA" as const,
+      label: "Jiva Daya & Gau Seva",
+      amount: jivaDayaTotal,
+      count: jivaDayaCount,
+      color: "#10B981",
+    },
+    {
+      purpose: "SOCIAL_AID" as const,
+      label: "Social Aid & Community",
+      amount: socialAidTotal,
+      count: socialAidCount,
+      color: "#EC4899",
+    },
+    {
+      purpose: "GENERAL_DAAN" as const,
+      label: "Sacred Rituals & Offerings",
+      amount: generalDaanTotal,
+      count: generalDaanCount,
+      color: "#06B6D4",
+    },
+  ];
+
+  const purposeBreakdown: SpiritualGivingPurpose[] = rawPurposes
+    .filter((p) => p.count > 0)
+    .map((p) => ({
+      ...p,
+      percentage:
+        totalSpiritualOutflow > 0
+          ? Math.round((p.amount / totalSpiritualOutflow) * 100)
+          : 0,
+    }))
+    .sort((a, b) => b.amount - a.amount);
+
+  // Recent 6 giving events
+  const recentGivingEvents = [...spiritualTxs]
+    .sort(
+      (a, b) =>
+        new Date(b.dateOfAdd).getTime() - new Date(a.dateOfAdd).getTime()
+    )
+    .slice(0, 6)
+    .map((tx) => ({
+      id: tx.id,
+      title: tx.title,
+      category: tx.category,
+      amount: Number(tx.amount),
+      date: tx.dateOfAdd.toISOString().split("T")[0],
+      isShubh: isAuspiciousAmount(Number(tx.amount)),
+    }));
+
+  const result: SpiritualGivingAnalyticsSummary = {
+    totalSpiritualOutflow,
+    totalEventsCount: spiritualTxs.length,
+    givingRatioOfOutflow,
+    givingRatioOfInflow,
+    bhogTotal,
+    bhogCount,
+    bhogPercentage,
+    donationTotal,
+    donationCount,
+    donationPercentage,
+    averageDonationTicket,
+    medianTicketSize,
+    activeGivingStreakMonths: maxStreak,
+    festiveOutflowTotal,
+    festiveOutflowPercentage,
+    routineOutflowTotal,
+    monthlyTrajectory,
+    shubhDenominations,
+    purposeBreakdown,
+    recentGivingEvents,
   };
 
   cacheSet(cacheKey, result, 30000, ["analytics", "transactions"]);

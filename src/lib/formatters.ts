@@ -140,33 +140,41 @@ export function formatDateTime(date: Date | string | null | undefined): string {
   return `${day} ${month} ${year} at ${strHours}:${strMinutes} ${ampm}`;
 }
 
-export function parseExcelDate(val: any): Date | null {
+export function parseExcelDate(val: unknown): Date | null {
   if (!val) return null;
 
+  let candidate: unknown = val;
+
   // 1. Unwrap ExcelJS cell objects (formula result, rich text, cell date)
-  if (typeof val === "object" && !(val instanceof Date)) {
-    if (val.result !== undefined && val.result !== null) {
-      val = val.result;
-    } else if (val.text !== undefined && val.text !== null) {
-      val = val.text;
-    } else if (val.date instanceof Date) {
-      val = val.date;
+  if (
+    typeof candidate === "object" &&
+    candidate !== null &&
+    !(candidate instanceof Date)
+  ) {
+    const record = candidate as Record<string, unknown>;
+    if (record.result !== undefined && record.result !== null) {
+      candidate = record.result;
+    } else if (record.text !== undefined && record.text !== null) {
+      candidate = record.text;
+    } else if (record.date instanceof Date) {
+      candidate = record.date;
     }
   }
 
   // 2. Direct Date object
-  if (val instanceof Date) return isNaN(val.getTime()) ? null : val;
+  if (candidate instanceof Date)
+    return isNaN(candidate.getTime()) ? null : candidate;
 
   // 3. Excel serial date (days since 1899-12-30)
-  if (typeof val === "number") {
-    const ms = (val - 25569) * 86400 * 1000;
+  if (typeof candidate === "number") {
+    const ms = (candidate - 25569) * 86400 * 1000;
     const d = new Date(ms);
     return isNaN(d.getTime()) ? null : d;
   }
 
   // 4. String format parsing
-  if (typeof val === "string") {
-    const trimmed = val.trim();
+  if (typeof candidate === "string") {
+    const trimmed = candidate.trim();
     if (!trimmed) return null;
 
     // Prioritize DD-MM-YYYY, DD/MM/YYYY, DD.MM.YYYY

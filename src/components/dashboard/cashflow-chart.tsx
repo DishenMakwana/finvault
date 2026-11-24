@@ -18,6 +18,7 @@ import {
   CashflowChartProps,
   CashflowTimeframe,
   CashflowChartDataPoint,
+  DashboardChartTooltipProps,
 } from "@/types/dashboard.types";
 import { getCashflowTrendData } from "@/lib/actions/cashflow.actions";
 
@@ -74,7 +75,11 @@ export function CashflowChart({
     });
   };
 
-  const CustomTooltip = ({ active, payload, label }: any) => {
+  const CustomTooltip = ({
+    active,
+    payload,
+    label,
+  }: DashboardChartTooltipProps) => {
     if (active && payload && payload.length) {
       const inflow = payload[0]?.value || 0;
       const outflow = payload[1]?.value || 0;

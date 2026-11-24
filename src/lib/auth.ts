@@ -1,9 +1,10 @@
 import { cache } from "react";
-import jwt from "jsonwebtoken";
+import jwt, { type SignOptions } from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { prisma } from "./prisma";
+import type { Session } from "@prisma/client";
 import { JwtPayload } from "@/types/settings.types";
 import { cacheGet, cacheSet, cacheInvalidateTag } from "./cache";
 import { UAParser } from "ua-parser-js";
@@ -122,7 +123,7 @@ export async function createSession(userId: number, email: string) {
   };
 
   const token = jwt.sign(payload, JWT_SECRET, {
-    expiresIn: expirySetting as any,
+    expiresIn: expirySetting as SignOptions["expiresIn"],
   });
 
   // 3. Update session with signed token
@@ -263,9 +264,9 @@ export async function requireAuth() {
   return user;
 }
 
-export async function getActiveSessions(userId: number) {
+export async function getActiveSessions(userId: number): Promise<Session[]> {
   const cacheKey = `sessions:${userId}`;
-  const cached = cacheGet<any[]>(cacheKey);
+  const cached = cacheGet<Session[]>(cacheKey);
   if (cached) return cached;
 
   // Opportunistic cleanup of expired sessions for this user

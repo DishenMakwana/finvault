@@ -1,16 +1,13 @@
-import {
-  requireAuth,
-  getActiveSessions,
-  getCurrentSessionId,
-} from "@/lib/auth";
+import { requireAuth, getCurrentSessionId } from "@/lib/auth";
+import { getUserActiveSessions } from "@/lib/actions/auth.actions";
 import { SessionManager } from "@/components/settings/session-manager";
 
 export default async function SettingsPage() {
-  const [user, currentSessionId] = await Promise.all([
+  const [user, currentSessionId, sessions] = await Promise.all([
     requireAuth(),
     getCurrentSessionId(),
+    getUserActiveSessions(),
   ]);
-  const sessions = await getActiveSessions(user.id);
 
   return (
     <div className="space-y-6">

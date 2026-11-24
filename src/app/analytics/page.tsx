@@ -6,11 +6,13 @@ import {
   getRentalIncomeAnalyticsData,
   getItemSpendingCadenceAnalytics,
   getSpendingCadenceAvailableItems,
+  getSpiritualGivingAnalytics,
 } from "@/lib/actions/analytics.actions";
 import { KpiCard } from "@/components/dashboard/kpi-card";
 import { CashflowAnalyticsChart } from "@/components/analytics/cashflow-analytics-chart";
 import { CategoryBarChart } from "@/components/analytics/category-bar-chart";
 import { SpendingCadenceSection } from "@/components/analytics/spending-cadence-section";
+import { SpiritualGivingSection } from "@/components/analytics/spiritual-giving-section";
 import { HouseAnalyticsSection } from "@/components/analytics/house-analytics-section";
 import { RentalIncomeSection } from "@/components/analytics/rental-income-section";
 import { formatINR } from "@/lib/formatters";
@@ -77,6 +79,7 @@ export default async function AnalyticsPage({
     rentalAnalytics,
     cadenceAnalytics,
     availableCadenceItems,
+    spiritualGivingAnalytics,
   ] = await Promise.all([
     requireAuth(),
     getAllHouses(),
@@ -94,6 +97,7 @@ export default async function AnalyticsPage({
       currentHouseId
     ),
     getSpendingCadenceAvailableItems(currentHouseId),
+    getSpiritualGivingAnalytics(currentHouseId),
   ]);
 
   const { summary } = analyticsData;
@@ -201,43 +205,61 @@ export default async function AnalyticsPage({
           </div>
 
           {/* Main Interactive Trend Chart Section */}
-          <CashflowAnalyticsChart
-            initialData={analyticsData}
-            houses={houses.map((h) => ({ id: h.id, name: h.name }))}
-            currentHouseId={currentHouseId}
-            currentRange={currentRange}
-            currentStartDate={currentStartDate}
-            currentEndDate={currentEndDate}
-            currentMode={currentMode}
-          />
+          <div className="pt-4 border-t border-border-subtle">
+            <CashflowAnalyticsChart
+              initialData={analyticsData}
+              houses={houses.map((h) => ({ id: h.id, name: h.name }))}
+              currentHouseId={currentHouseId}
+              currentRange={currentRange}
+              currentStartDate={currentStartDate}
+              currentEndDate={currentEndDate}
+              currentMode={currentMode}
+            />
+          </div>
 
           {/* In-Depth Category Distribution & Benchmark Bar Chart */}
-          <CategoryBarChart
-            inflowCategories={analyticsData.categories.inflow}
-            outflowCategories={analyticsData.categories.outflow}
-            combinedCategories={analyticsData.categories.combined}
-            defaultType="COMBINED"
-          />
+          <div className="pt-4 border-t border-border-subtle">
+            <CategoryBarChart
+              inflowCategories={analyticsData.categories.inflow}
+              outflowCategories={analyticsData.categories.outflow}
+              combinedCategories={analyticsData.categories.combined}
+              defaultType="COMBINED"
+            />
+          </div>
 
           {/* Multi-Property & House Financial Intelligence Dashboard */}
-          <HouseAnalyticsSection data={houseAnalytics} />
+          <div className="pt-4 border-t border-border-subtle">
+            <HouseAnalyticsSection data={houseAnalytics} />
+          </div>
 
           {/* Yearly Rental Income & Occupancy Matrix */}
-          <RentalIncomeSection
-            data={rentalAnalytics}
-            selectedYear={rentalYear}
-            initialViewMode={rentalView}
-            currentHouseId={currentHouseId}
-          />
+          <div className="pt-4 border-t border-border-subtle">
+            <RentalIncomeSection
+              data={rentalAnalytics}
+              selectedYear={rentalYear}
+              initialViewMode={rentalView}
+              currentHouseId={currentHouseId}
+            />
+          </div>
 
           {/* Spending Cadence & Item Occurrence Intelligence */}
-          <SpendingCadenceSection
-            key={`${currentHouseId}-${resolvedParams.cadenceItem || "black-kia"}`}
-            initialAnalytics={cadenceAnalytics}
-            availableItems={availableCadenceItems}
-            currentHouseId={currentHouseId}
-            initialItemKey={resolvedParams.cadenceItem || "black-kia"}
-          />
+          <div className="pt-4 border-t border-border-subtle">
+            <SpendingCadenceSection
+              key={`${currentHouseId}-${resolvedParams.cadenceItem || "black-kia"}`}
+              initialAnalytics={cadenceAnalytics}
+              availableItems={availableCadenceItems}
+              currentHouseId={currentHouseId}
+              initialItemKey={resolvedParams.cadenceItem || "black-kia"}
+            />
+          </div>
+
+          {/* Spiritual Giving & Philanthropic Stewardship (Bhog & Donation Intelligence) */}
+          <div className="pt-4 border-t border-border-subtle">
+            <SpiritualGivingSection
+              data={spiritualGivingAnalytics}
+              currentHouseId={currentHouseId}
+            />
+          </div>
         </>
       )}
     </div>

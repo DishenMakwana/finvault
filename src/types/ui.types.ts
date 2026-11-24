@@ -62,3 +62,10 @@ export interface PremiumLoadingProps {
   fullScreen?: boolean;
   className?: string;
 }
+
+export interface ActionResponse<T = void> {
+  success?: boolean;
+  data?: T;
+  error?: string;
+  message?: string;
+}

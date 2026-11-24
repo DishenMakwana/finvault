@@ -28,6 +28,8 @@ import {
   CategoryAnalysisType,
   CategoryMetricDisplay,
   CategoryAnalyticsItem,
+  CategoryBarCustomLabelProps,
+  CategoryBarTooltipProps,
 } from "@/types/analytics.types";
 import { formatCompactINR, formatINR } from "@/lib/formatters";
 
@@ -54,8 +56,13 @@ export function CategoryBarChart({
         ? inflowCategories
         : combinedCategories;
 
-  const { items, averageAmount, averagePercentage, totalCategoryAmount } =
-    currentData;
+  const {
+    items: allItems,
+    averageAmount,
+    averagePercentage,
+    totalCategoryAmount,
+  } = currentData;
+  const items = (allItems || []).slice(0, 20);
 
   const metricDataKey =
     metricMode === "percentage" ? "percentage" : "totalAmount";
@@ -68,9 +75,12 @@ export function CategoryBarChart({
       : `Avg ${formatCompactINR(averageAmount)}`;
 
   // Formatter for top-of-bar labels (matches screenshot with percentages/amounts on top)
-  const renderCustomTopLabel = (props: any) => {
-    const { x, y, width, value, index } = props;
+  const renderCustomTopLabel = (props: CategoryBarCustomLabelProps) => {
+    const { x = 0, y = 0, width = 0, value, index = 0 } = props;
     if (value === undefined || value === null) return null;
+    const numX = Number(x);
+    const numY = Number(y);
+    const numWidth = Number(width);
     const item = items[index];
     const isInflow = item?.type === "INFLOW";
     const formatted =
@@ -80,8 +90,8 @@ export function CategoryBarChart({
 
     return (
       <text
-        x={x + width / 2}
-        y={y - 8}
+        x={numX + numWidth / 2}
+        y={numY - 8}
         fill={isInflow ? "#34d399" : "#fb7185"}
         textAnchor="middle"
         fontSize={10.5}
@@ -94,7 +104,10 @@ export function CategoryBarChart({
   };
 
   // Tooltip custom component
-  const CustomCategoryTooltip = ({ active, payload }: any) => {
+  const CustomCategoryTooltip = ({
+    active,
+    payload,
+  }: CategoryBarTooltipProps) => {
     if (active && payload && payload.length) {
       const item: CategoryAnalyticsItem = payload[0].payload;
       const isInflow = item.type === "INFLOW";
@@ -199,11 +212,16 @@ export function CategoryBarChart({
             <BarChart3 className="w-5 h-5 stroke-[2.5]" />
           </div>
           <div>
-            <h3 className="text-base sm:text-lg font-bold text-white tracking-tight leading-snug">
-              Category Distribution & Benchmark
-            </h3>
+            <div className="flex items-center gap-2">
+              <h3 className="text-base sm:text-lg font-bold text-white tracking-tight leading-snug">
+                Category Distribution & Benchmark
+              </h3>
+              <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-primary/10 text-primary border border-primary/20">
+                Top 20
+              </span>
+            </div>
             <p className="text-xs text-neutral-400">
-              Ranked category share with dynamic average benchmark line
+              Ranked top 20 category share with dynamic average benchmark line
             </p>
           </div>
         </div>

@@ -33,6 +33,8 @@ import {
   AnalyticsDatePreset,
   AnalyticsViewMode,
   AnalyticsDataPoint,
+  AnalyticsChartDotProps,
+  AnalyticsTooltipProps,
 } from "@/types/analytics.types";
 
 export function CashflowAnalyticsChart({
@@ -126,8 +128,8 @@ export function CashflowAnalyticsChart({
     viewMode === "cumulative" ? "cumulativeOutflow" : "outflow";
 
   // Custom Dot for INFLOW: renders green circle if point has inflow transactions
-  const renderInflowDot = (props: any) => {
-    const { cx, cy, payload, index } = props;
+  const renderInflowDot = (props: AnalyticsChartDotProps) => {
+    const { cx = 0, cy = 0, payload, index } = props;
     if (!payload?.hasInflow) {
       return <g key={`inflow-empty-${index}`} />;
     }
@@ -146,8 +148,8 @@ export function CashflowAnalyticsChart({
   };
 
   // Custom Dot for OUTFLOW: renders red circle if point has outflow transactions
-  const renderOutflowDot = (props: any) => {
-    const { cx, cy, payload, index } = props;
+  const renderOutflowDot = (props: AnalyticsChartDotProps) => {
+    const { cx = 0, cy = 0, payload, index } = props;
     if (!payload?.hasOutflow) {
       return <g key={`outflow-empty-${index}`} />;
     }
@@ -166,7 +168,10 @@ export function CashflowAnalyticsChart({
   };
 
   // Rich Tooltip with transaction details
-  const CustomAnalyticsTooltip = ({ active, payload }: any) => {
+  const CustomAnalyticsTooltip = ({
+    active,
+    payload,
+  }: AnalyticsTooltipProps) => {
     if (active && payload && payload.length) {
       const data: AnalyticsDataPoint = payload[0].payload;
       const txs = data.transactions || [];

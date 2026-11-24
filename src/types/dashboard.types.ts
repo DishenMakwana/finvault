@@ -67,7 +67,7 @@ export interface DashboardPageProps {
 interface RecentFeedTransactionItem {
   id: number | string;
   type: "INFLOW" | "OUTFLOW";
-  amount: any;
+  amount: number | string;
   title: string;
   desc?: string | null;
   category: string;
@@ -91,4 +91,32 @@ export interface CategoryBreakdownItem {
 export interface CategoryBreakdownCardProps {
   categories: CategoryBreakdownItem[];
   netFlow: number;
+}
+
+export interface DashboardSummaryResult {
+  houses: { id: number; name: string; initialCash: number }[];
+  totalInitialCash: number;
+  currentCashInHand: number;
+  totalInflow: number;
+  totalOutflow: number;
+  inflowCount: number;
+  outflowCount: number;
+  netFlow: number;
+  outstandingLoans: number;
+  totalLoansDisbursed: number;
+  totalLoansPaidBack: number;
+  timelineData: CashflowChartDataPoint[];
+  recentTransactions: RecentFeedTransactionItem[];
+  categoryBreakdown: CategoryBreakdownItem[];
+}
+
+export interface DashboardChartTooltipProps {
+  active?: boolean;
+  payload?: {
+    value: number;
+    name: string;
+    payload: CashflowChartDataPoint;
+    color: string;
+  }[];
+  label?: string;
 }

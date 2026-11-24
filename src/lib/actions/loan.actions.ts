@@ -3,20 +3,22 @@
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser, requireAuth } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
-import { LoanStatus } from "@prisma/client";
+import { type Prisma, LoanStatus } from "@prisma/client";
 import { cacheGet, cacheSet, cacheInvalidateTag } from "@/lib/cache";
 import { resolveTargetHouseIds } from "@/lib/house-query";
+import type { LoanItem } from "@/types/loans.types";
+import type { ActionResponse } from "@/types/ui.types";
 
-export async function getLoans(houseId?: number | string) {
+export async function getLoans(houseId?: number | string): Promise<LoanItem[]> {
   const user = await getCurrentUser();
   if (!user) return [];
 
   const { targetIds, cacheKeySegment } = await resolveTargetHouseIds(houseId);
   const cacheKey = `loans:${user.id}:${cacheKeySegment}`;
-  const cached = cacheGet<any[]>(cacheKey);
+  const cached = cacheGet<LoanItem[]>(cacheKey);
   if (cached) return cached;
 
-  const whereClause: any = {
+  const whereClause: Prisma.LoanWhereInput = {
     deletedAt: null,
     houseId: { in: targetIds },
   };
@@ -68,7 +70,9 @@ export async function getLoans(houseId?: number | string) {
   return result;
 }
 
-export async function addLoanAction(formData: FormData) {
+export async function addLoanAction(
+  formData: FormData
+): Promise<ActionResponse> {
   const user = await requireAuth();
 
   const relativeName = (formData.get("relativeName") as string)?.trim();
@@ -115,7 +119,9 @@ export async function addLoanAction(formData: FormData) {
   return { success: true };
 }
 
-export async function recordRepaymentAction(formData: FormData) {
+export async function recordRepaymentAction(
+  formData: FormData
+): Promise<ActionResponse> {
   const user = await requireAuth();
 
   const loanIdStr = formData.get("loanId") as string;

@@ -102,12 +102,13 @@ export function UploadStatementModal({
       if (res.error) {
         setError(res.error);
         setLoading(false);
-      } else if (res.stats) {
-        setStats(res.stats);
+      } else if (res.data) {
+        setStats(res.data);
         setLoading(false);
       }
-    } catch (err: any) {
-      setError(err?.message || "An unexpected error occurred during sync.");
+    } catch (err: unknown) {
+      const error = err as Error | undefined;
+      setError(error?.message || "An unexpected error occurred during sync.");
       setLoading(false);
     }
   };

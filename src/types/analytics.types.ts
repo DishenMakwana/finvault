@@ -253,6 +253,84 @@ export interface SubTypeDecomposition {
   color: string;
 }
 
+type CategoryPredictabilityClass = "FIXED" | "ELASTIC" | "WILDCARD";
+
+interface OutflowVelocityMetrics {
+  currentMonthTotal: number;
+  daysElapsedInMonth: number;
+  totalDaysInMonth: number;
+  currentDailyBurnRate: number;
+  projectedMonthEndSpend: number;
+  baselineMonthlySpend: number;
+  velocityPacingPercentage: number;
+  status:
+    "SLOW" | "NORMAL" | "ACCELERATED" | "OVERHEATING" | "CADENCE_ESTIMATED";
+  mode: "LIVE_MTD" | "CADENCE_ESTIMATED";
+  cadenceExpectedMonthly: number;
+  cadenceIntervalDays: number;
+}
+
+interface OutflowVolatilityMetrics {
+  standardDeviation: number;
+  meanAmount: number;
+  coefficientOfVariation: number;
+  classification: CategoryPredictabilityClass;
+  fixedBaselineAmount: number;
+  volatilityScore: number;
+}
+
+interface OutflowAnomalyItem {
+  id: number;
+  title: string;
+  amount: number;
+  date: string;
+  zScore: number;
+  multiplierVsMedian: number;
+  isFlagged: boolean;
+}
+
+interface ParetoConcentrationItem {
+  name: string;
+  amount: number;
+  percentage: number;
+  cumulativePercentage: number;
+  transactionCount: number;
+}
+
+interface ParetoAnalysisResult {
+  topDrivers: ParetoConcentrationItem[];
+  tailSpendTotal: number;
+  tailSpendPercentage: number;
+  tailSpendCount: number;
+  top20PercentSpendShare: number;
+}
+
+interface TemporalHeatmapCell {
+  dayOfWeek: number;
+  dayName: string;
+  decade: "EARLY" | "MID" | "LATE";
+  amount: number;
+  count: number;
+  intensity: 0 | 1 | 2 | 3 | 4;
+}
+
+interface MicroBleedMetrics {
+  threshold: number;
+  totalBleedAmount: number;
+  totalBleedCount: number;
+  percentageOfCategoryTotal: number;
+  topMicroTitles: { title: string; count: number; total: number }[];
+}
+
+export interface ExtendedCategoryAnalytics {
+  velocity: OutflowVelocityMetrics;
+  volatility: OutflowVolatilityMetrics;
+  anomalies: OutflowAnomalyItem[];
+  pareto: ParetoAnalysisResult;
+  temporalHeatmap: TemporalHeatmapCell[];
+  microBleed: MicroBleedMetrics;
+}
+
 export interface SpendingCadenceAnalyticsResult {
   queryKey: string;
   queryLabel: string;
@@ -278,6 +356,7 @@ export interface SpendingCadenceAnalyticsResult {
   monthlyRunRates: MonthlySpendRunRate[];
   subTypeBreakdown: SubTypeDecomposition[];
   anomaliesCount: number;
+  extendedIntelligence?: ExtendedCategoryAnalytics;
 }
 
 export interface SpendingCadenceAvailableItem {
@@ -294,4 +373,115 @@ export interface SpendingCadenceSectionProps {
   availableItems: SpendingCadenceAvailableItem[];
   currentHouseId?: string;
   initialItemKey?: string;
+}
+
+export interface CategoryOutflowIntelligenceProps {
+  data: ExtendedCategoryAnalytics;
+  categoryLabel: string;
+}
+
+export interface ShubhDenominationItem {
+  amount: number;
+  label: string;
+  count: number;
+  total: number;
+  percentage: number;
+}
+
+export interface MonthlyGivingTrajectory {
+  yearMonth: string;
+  label: string;
+  bhogAmount: number;
+  donationAmount: number;
+  totalAmount: number;
+  eventCount: number;
+}
+
+export interface SpiritualGivingPurpose {
+  purpose:
+    "ANNADANAM" | "TEMPLE_TRUST" | "JIVA_DAYA" | "SOCIAL_AID" | "GENERAL_DAAN";
+  label: string;
+  amount: number;
+  count: number;
+  percentage: number;
+  color: string;
+}
+
+export interface SpiritualGivingAnalyticsSummary {
+  totalSpiritualOutflow: number;
+  totalEventsCount: number;
+  givingRatioOfOutflow: number;
+  givingRatioOfInflow: number;
+  bhogTotal: number;
+  bhogCount: number;
+  bhogPercentage: number;
+  donationTotal: number;
+  donationCount: number;
+  donationPercentage: number;
+  averageDonationTicket: number;
+  medianTicketSize: number;
+  activeGivingStreakMonths: number;
+  festiveOutflowTotal: number;
+  festiveOutflowPercentage: number;
+  routineOutflowTotal: number;
+  monthlyTrajectory: MonthlyGivingTrajectory[];
+  shubhDenominations: ShubhDenominationItem[];
+  purposeBreakdown: SpiritualGivingPurpose[];
+  recentGivingEvents: {
+    id: number;
+    title: string;
+    category: string;
+    amount: number;
+    date: string;
+    isShubh: boolean;
+  }[];
+}
+
+export interface SpiritualGivingSectionProps {
+  data: SpiritualGivingAnalyticsSummary;
+  currentHouseId?: string;
+}
+
+export interface RawRentalTx {
+  id: number;
+  title: string;
+  amount: number;
+  date: Date;
+  houseId?: number;
+  houseName?: string;
+}
+
+export interface ResolvedRentalPayment {
+  amount: number;
+  txId: number;
+  txDate: string;
+  txTitle: string;
+  coveredMonths: number[];
+}
+
+export interface AnalyticsChartDotProps {
+  cx?: number;
+  cy?: number;
+  index?: number;
+  payload?: AnalyticsDataPoint;
+}
+
+export interface AnalyticsTooltipProps {
+  active?: boolean;
+  payload?: { payload: AnalyticsDataPoint }[];
+}
+
+export interface CategoryBarCustomLabelProps {
+  x?: number | string;
+  y?: number | string;
+  width?: number | string;
+  height?: number | string;
+  value?: number | string;
+  index?: number;
+  payload?: CategoryAnalyticsItem;
+}
+
+export interface CategoryBarTooltipProps {
+  active?: boolean;
+  payload?: { payload: CategoryAnalyticsItem }[];
 }

@@ -5,14 +5,16 @@ import { getCurrentUser, requireAuth } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
 import { cacheGet, cacheSet, cacheInvalidateTag } from "@/lib/cache";
 import { resolveTargetHouseIds } from "@/lib/house-query";
+import type { HouseItem, HousesWithBalancesResult } from "@/types/houses.types";
+import type { ActionResponse } from "@/types/ui.types";
 
-export async function getAllHouses() {
+export async function getAllHouses(): Promise<HouseItem[]> {
   const user = await getCurrentUser();
   if (!user) return [];
 
-  let houses = cacheGet<any[]>("houses:raw");
-  if (!houses) {
-    houses = await prisma.house.findMany({
+  let cachedHouses = cacheGet<HouseItem[]>("houses:raw");
+  if (!cachedHouses) {
+    const rawHouses = await prisma.house.findMany({
       where: {
         deletedAt: null,
       },
@@ -24,6 +26,8 @@ export async function getAllHouses() {
         initialCash: true,
         initialCashDate: true,
         createdAt: true,
+        updatedAt: true,
+        deletedAt: true,
         user: {
           select: {
             id: true,
@@ -34,32 +38,39 @@ export async function getAllHouses() {
       },
       orderBy: { createdAt: "asc" },
     });
-    cacheSet("houses:raw", houses, 60000, ["houses"]);
+    cachedHouses = rawHouses.map((h) => ({
+      id: h.id,
+      userId: h.userId,
+      name: h.name,
+      address: h.address,
+      initialCash: Number(h.initialCash),
+      initialCashDate: h.initialCashDate,
+      createdAt: h.createdAt,
+      updatedAt: h.updatedAt,
+      deletedAt: h.deletedAt,
+      isOwner: false,
+      ownerName: h.user?.name || h.user?.email || "Family Member",
+      user: h.user,
+    }));
+    cacheSet("houses:raw", cachedHouses, 60000, ["houses"]);
   }
 
   // Sort so user's own houses appear first
-  const sorted = [...houses].sort((a, b) => {
+  const sorted = [...cachedHouses].sort((a, b) => {
     if (a.userId === user.id && b.userId !== user.id) return -1;
     if (a.userId !== user.id && b.userId === user.id) return 1;
     return a.id - b.id;
   });
 
   return sorted.map((h) => ({
-    id: h.id,
-    userId: h.userId,
-    name: h.name,
-    address: h.address,
-    initialCash: Number(h.initialCash),
-    initialCashDate: h.initialCashDate,
-    createdAt: h.createdAt,
-    updatedAt: h.updatedAt,
-    deletedAt: h.deletedAt,
+    ...h,
     isOwner: h.userId === user.id,
-    ownerName: h.user?.name || h.user?.email || "Family Member",
   }));
 }
 
-export async function getHousesWithBalances(selectedHouseId?: string | number) {
+export async function getHousesWithBalances(
+  selectedHouseId?: string | number
+): Promise<HousesWithBalancesResult> {
   const user = await getCurrentUser();
   if (!user) {
     return {
@@ -72,7 +83,7 @@ export async function getHousesWithBalances(selectedHouseId?: string | number) {
   const { targetIds, cacheKeySegment } =
     await resolveTargetHouseIds(selectedHouseId);
   const cacheKey = `houses:balances:${user.id}:${cacheKeySegment}`;
-  const cached = cacheGet<any>(cacheKey);
+  const cached = cacheGet<HousesWithBalancesResult>(cacheKey);
   if (cached) return cached;
 
   const [houses, transactions, loans] = await Promise.all([
@@ -192,7 +203,9 @@ export async function getHousesWithBalances(selectedHouseId?: string | number) {
   return result;
 }
 
-export async function createHouseAction(formData: FormData) {
+export async function createHouseAction(
+  formData: FormData
+): Promise<ActionResponse> {
   const user = await requireAuth();
 
   const name = (formData.get("name") as string)?.trim();

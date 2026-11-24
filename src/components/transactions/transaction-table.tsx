@@ -7,7 +7,6 @@ import {
   Pencil,
   ArrowUpRight,
   ArrowDownRight,
-  RotateCcw,
   ChevronUp,
   ChevronDown,
   ChevronsUpDown,
@@ -15,7 +14,6 @@ import {
 } from "lucide-react";
 import {
   softDeleteTransactionAction,
-  restoreTransactionAction,
   toggleTransactionFlagAction,
 } from "@/lib/actions/cashflow.actions";
 import { formatINR, formatDateDMY } from "@/lib/formatters";
@@ -48,9 +46,15 @@ export function TransactionTable({
     null
   );
   const [isDeleting, setIsDeleting] = useState(false);
+  const [deletedIds, setDeletedIds] = useState<Set<number | string>>(new Set());
   const [optimisticFlags, setOptimisticFlags] = useState<
     Record<string | number, boolean>
   >({});
+
+  // Active items: completely hide any soft-deleted records from UI
+  const activeTransactions = useMemo(() => {
+    return transactions.filter((t) => !t.deletedAt && !deletedIds.has(t.id));
+  }, [transactions, deletedIds]);
 
   // Read sort, pagination, and search params from URL
   const searchQuery = searchParams.get("search") || "";
@@ -74,7 +78,7 @@ export function TransactionTable({
   const { filteredTransactions, scoreMap } = useMemo(() => {
     const scores = new Map<string | number, MatchScoreResult>();
 
-    const filtered = transactions.filter((t) => {
+    const filtered = activeTransactions.filter((t) => {
       if (!isSearching) return true;
 
       const fields: SearchableField[] = [
@@ -95,7 +99,7 @@ export function TransactionTable({
     });
 
     return { filteredTransactions: filtered, scoreMap: scores };
-  }, [transactions, tokens, isSearching]);
+  }, [activeTransactions, tokens, isSearching]);
 
   // Stage 2: Relevance-First Smart Sorting
   const sortedTransactions = useMemo(() => {
@@ -231,14 +235,13 @@ export function TransactionTable({
 
   const handleConfirmDelete = async () => {
     if (!deletingTx) return;
+    const txId = deletingTx.id;
+    // Optimistic UI removal: hide immediately from UI
+    setDeletedIds((prev) => new Set(prev).add(txId));
     setIsDeleting(true);
-    await softDeleteTransactionAction(deletingTx.id);
+    await softDeleteTransactionAction(txId);
     setIsDeleting(false);
     setDeletingTx(null);
-  };
-
-  const handleRestore = async (id: number | string) => {
-    await restoreTransactionAction(id);
   };
 
   const handleToggleFlag = async (
@@ -411,7 +414,6 @@ export function TransactionTable({
           <tbody className="divide-y divide-border-active">
             {paginatedTransactions.map((tx, idx) => {
               const isInflow = tx.type === "INFLOW";
-              const isDeleted = Boolean(tx.deletedAt);
               const isFlagged =
                 optimisticFlags[tx.id] !== undefined
                   ? optimisticFlags[tx.id]
@@ -423,11 +425,7 @@ export function TransactionTable({
                 <tr
                   key={tx.id}
                   className={`hover:bg-surface-hover transition-colors ${
-                    isDeleted
-                      ? "opacity-40 bg-rose-950/10"
-                      : isFlagged
-                        ? "bg-red-950/10 hover:bg-red-950/20"
-                        : ""
+                    isFlagged ? "bg-red-950/10 hover:bg-red-950/20" : ""
                   }`}
                 >
                   {/* # */}
@@ -509,55 +507,44 @@ export function TransactionTable({
 
                   {/* Actions */}
                   <td className="py-3.5 px-4 text-center whitespace-nowrap">
-                    {isDeleted ? (
+                    <div className="flex items-center justify-center gap-1.5">
                       <button
                         type="button"
-                        onClick={() => handleRestore(tx.id)}
-                        title="Restore Deleted Record"
-                        className="p-1 rounded text-slate-400 hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer"
+                        onClick={() => handleToggleFlag(tx.id, isFlagged)}
+                        title={
+                          isFlagged
+                            ? "Flagged for family discussion (Click to unflag)"
+                            : "Flag for family discussion"
+                        }
+                        className={`p-1 rounded transition-colors cursor-pointer ${
+                          isFlagged
+                            ? "text-red-500 bg-red-500/15 hover:bg-red-500/25"
+                            : "text-neutral-500 hover:text-red-400 hover:bg-neutral-800"
+                        }`}
                       >
-                        <RotateCcw className="w-3.5 h-3.5" />
-                      </button>
-                    ) : (
-                      <div className="flex items-center justify-center gap-1.5">
-                        <button
-                          type="button"
-                          onClick={() => handleToggleFlag(tx.id, isFlagged)}
-                          title={
-                            isFlagged
-                              ? "Flagged for family discussion (Click to unflag)"
-                              : "Flag for family discussion"
-                          }
-                          className={`p-1 rounded transition-colors cursor-pointer ${
-                            isFlagged
-                              ? "text-red-500 bg-red-500/15 hover:bg-red-500/25"
-                              : "text-neutral-500 hover:text-red-400 hover:bg-neutral-800"
+                        <Flag
+                          className={`w-3.5 h-3.5 ${
+                            isFlagged ? "fill-red-500 text-red-500" : ""
                           }`}
-                        >
-                          <Flag
-                            className={`w-3.5 h-3.5 ${
-                              isFlagged ? "fill-red-500 text-red-500" : ""
-                            }`}
-                          />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setEditingTx(tx)}
-                          title="Edit Transaction"
-                          className="p-1 rounded text-neutral-400 hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer"
-                        >
-                          <Pencil className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setDeletingTx(tx)}
-                          title="Delete Record"
-                          className="p-1 rounded text-slate-500 hover:text-danger hover:bg-danger/10 transition-colors cursor-pointer"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    )}
+                        />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setEditingTx(tx)}
+                        title="Edit Transaction"
+                        className="p-1 rounded text-neutral-400 hover:text-primary hover:bg-primary/10 transition-colors cursor-pointer"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDeletingTx(tx)}
+                        title="Delete Record"
+                        className="p-1 rounded text-slate-500 hover:text-danger hover:bg-danger/10 transition-colors cursor-pointer"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </td>
                 </tr>
               );

@@ -176,7 +176,7 @@ export function RentalIncomeSection({
       initial={{ opacity: 0, y: 14 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.35, delay: 0.25, ease: "easeOut" }}
-      className={`space-y-4 pt-4 border-t border-border-subtle transition-opacity duration-200 ${
+      className={`space-y-4 transition-opacity duration-200 ${
         isPending ? "opacity-75" : "opacity-100"
       }`}
     >

@@ -1,10 +1,5 @@
 import { prisma } from "@/lib/prisma";
-
-export interface TargetHouseResolution {
-  targetIds: number[];
-  isAll: boolean;
-  cacheKeySegment: string;
-}
+import { TargetHouseResolution } from "@/types/houses.types";
 
 /**
  * Common dynamic query helper:

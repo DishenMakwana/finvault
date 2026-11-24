@@ -38,7 +38,7 @@ export interface UserProfile {
 export interface HouseOption {
   id: number | string;
   name: string;
-  initialCash?: any;
+  initialCash?: number | string;
   userId?: number;
   isOwner?: boolean;
 }

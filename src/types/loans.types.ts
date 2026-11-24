@@ -1,16 +1,16 @@
 interface LoanRepaymentItem {
   id: number | string;
-  amount: any;
+  amount: number | string;
   repaymentDate: Date | string;
   notes?: string | null;
   house?: { name: string } | null;
 }
 
-interface LoanItem {
+export interface LoanItem {
   id: number | string;
   relativeName: string;
-  totalAmount: any;
-  amountPaid: any;
+  totalAmount: number | string;
+  amountPaid: number | string;
   nextPaymentDueDate: Date | string | null;
   status: "PENDING" | "PARTIALLY_PAID" | "FULLY_PAID";
   notes?: string | null;
@@ -31,8 +31,8 @@ export interface RepaymentModalProps {
   loan: {
     id: number | string;
     relativeName: string;
-    totalAmount: any;
-    amountPaid: any;
+    totalAmount: number | string;
+    amountPaid: number | string;
   } | null;
   houses: { id: number | string; name: string }[];
 }

@@ -28,6 +28,7 @@ import {
 } from "recharts";
 import { formatINR, formatCompactINR } from "@/lib/formatters";
 import { getItemSpendingCadenceAnalytics } from "@/lib/actions/analytics.actions";
+import { CategoryOutflowIntelligence } from "@/components/analytics/category-outflow-intelligence";
 import {
   SpendingCadenceSectionProps,
   SpendingCadenceAnalyticsResult,
@@ -580,6 +581,16 @@ export function SpendingCadenceSection({
           </ResponsiveContainer>
         </div>
       </div>
+
+      {/* Category Outflow Intelligence Matrix (Placed directly below Spending Cadence) */}
+      {data.extendedIntelligence && (
+        <div className="pt-4 border-t border-border-subtle">
+          <CategoryOutflowIntelligence
+            data={data.extendedIntelligence}
+            categoryLabel={data.queryLabel}
+          />
+        </div>
+      )}
     </div>
   );
 }

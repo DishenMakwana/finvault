@@ -6,12 +6,9 @@ import {
 import { HouseList } from "@/components/houses/house-list";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { HousesPageProps } from "@/types/houses.types";
 
-export default async function HousesPage({
-  searchParams,
-}: {
-  searchParams?: Promise<{ houseId?: string }>;
-}) {
+export default async function HousesPage({ searchParams }: HousesPageProps) {
   const resolvedParams = searchParams ? await searchParams : {};
   const cookieStore = await cookies();
   const cookieHouseId = cookieStore.get("finvault_active_house")?.value;

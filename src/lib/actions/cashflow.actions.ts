@@ -4,9 +4,13 @@ import ExcelJS from "exceljs";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser, requireAuth } from "@/lib/auth";
 import { revalidatePath } from "next/cache";
-import { TransactionType } from "@prisma/client";
+import { Prisma, TransactionType } from "@prisma/client";
 import { cacheGet, cacheSet, cacheInvalidateTag } from "@/lib/cache";
-import { TransactionFilterOptions } from "@/types/transactions.types";
+import {
+  TransactionFilterOptions,
+  TransactionTableItem,
+  SyncStats,
+} from "@/types/transactions.types";
 import {
   getSearchTokens,
   scoreTransactionAgainstTokens,
@@ -16,8 +20,10 @@ import { parseExcelDate, formatToDateStr } from "@/lib/formatters";
 import {
   CashflowChartDataPoint,
   CashflowTimeframe,
+  DashboardSummaryResult,
 } from "@/types/dashboard.types";
 import { resolveTargetHouseIds } from "@/lib/house-query";
+import { ActionResponse } from "@/types/ui.types";
 
 function invalidateCashflowCaches() {
   cacheInvalidateTag("categories");
@@ -35,7 +41,7 @@ export async function getUniqueCategories(
   if (cached) return cached;
 
   try {
-    const where: any = { deletedAt: null };
+    const where: Prisma.TransactionWhereInput = { deletedAt: null };
     if (type) {
       where.type = type;
     }
@@ -113,7 +119,9 @@ export async function getUniqueCategories(
   }
 }
 
-export async function addTransactionAction(formData: FormData) {
+export async function addTransactionAction(
+  formData: FormData
+): Promise<ActionResponse> {
   const user = await requireAuth();
 
   const houseIdStr = formData.get("houseId") as string;
@@ -135,6 +143,7 @@ export async function addTransactionAction(formData: FormData) {
 
   if (isNaN(houseId) || !type || !amountStr || !title || !normalizedCategory) {
     return {
+      success: false,
       error:
         "Please provide all required fields (House, Type, Amount, Title, Category).",
     };
@@ -142,7 +151,7 @@ export async function addTransactionAction(formData: FormData) {
 
   const amount = parseFloat(amountStr);
   if (isNaN(amount) || amount <= 0) {
-    return { error: "Amount must be a positive number." };
+    return { success: false, error: "Amount must be a positive number." };
   }
 
   // Verify house exists
@@ -151,7 +160,7 @@ export async function addTransactionAction(formData: FormData) {
   });
 
   if (!house) {
-    return { error: "Selected house does not exist." };
+    return { success: false, error: "Selected house does not exist." };
   }
 
   await prisma.transaction.create({
@@ -173,7 +182,9 @@ export async function addTransactionAction(formData: FormData) {
   return { success: true };
 }
 
-export async function getTransactions(filters: TransactionFilterOptions = {}) {
+export async function getTransactions(
+  filters: TransactionFilterOptions = {}
+): Promise<TransactionTableItem[]> {
   const user = await getCurrentUser();
   if (!user) return [];
 
@@ -181,16 +192,13 @@ export async function getTransactions(filters: TransactionFilterOptions = {}) {
     filters.houseId
   );
   const cacheKey = `transactions:${user.id}:${cacheKeySegment}:${JSON.stringify(filters)}`;
-  const cached = cacheGet<any[]>(cacheKey);
+  const cached = cacheGet<TransactionTableItem[]>(cacheKey);
   if (cached) return cached;
 
-  const whereClause: any = {
+  const whereClause: Prisma.TransactionWhereInput = {
     houseId: { in: targetIds },
+    deletedAt: null,
   };
-
-  if (!filters.includeDeleted) {
-    whereClause.deletedAt = null;
-  }
 
   if (filters.type && filters.type !== "ALL") {
     whereClause.type = filters.type as TransactionType;
@@ -211,23 +219,23 @@ export async function getTransactions(filters: TransactionFilterOptions = {}) {
   }
 
   if (filters.startDate || filters.endDate) {
-    whereClause.dateOfAdd = {};
+    const dateFilter: Prisma.DateTimeFilter = {};
     if (filters.startDate) {
-      whereClause.dateOfAdd.gte = new Date(filters.startDate);
+      dateFilter.gte = new Date(filters.startDate);
     }
     if (filters.endDate) {
       const end = new Date(filters.endDate);
       end.setHours(23, 59, 59, 999);
-      whereClause.dateOfAdd.lte = end;
+      dateFilter.lte = end;
     }
+    whereClause.dateOfAdd = dateFilter;
   }
 
   if (filters.minAmount !== undefined || filters.maxAmount !== undefined) {
-    whereClause.amount = {};
-    if (filters.minAmount !== undefined)
-      whereClause.amount.gte = filters.minAmount;
-    if (filters.maxAmount !== undefined)
-      whereClause.amount.lte = filters.maxAmount;
+    const amountFilter: Prisma.DecimalFilter = {};
+    if (filters.minAmount !== undefined) amountFilter.gte = filters.minAmount;
+    if (filters.maxAmount !== undefined) amountFilter.lte = filters.maxAmount;
+    whereClause.amount = amountFilter;
   }
 
   if (filters.flaggedOnly || filters.isFlagged !== undefined) {
@@ -251,7 +259,7 @@ export async function getTransactions(filters: TransactionFilterOptions = {}) {
   }
 
   // Database-level sorting optimization: map sortBy & sortOrder directly into query
-  let orderByClause: any[] = [];
+  let orderByClause: Prisma.TransactionOrderByWithRelationInput[] = [];
   if (filters.sortBy) {
     const dir = filters.sortOrder === "asc" ? "asc" : "desc";
     switch (filters.sortBy) {
@@ -355,21 +363,6 @@ export async function softDeleteTransactionAction(id: number | string) {
   await prisma.transaction.updateMany({
     where: { id: txId, userId: user.id },
     data: { deletedAt: new Date() },
-  });
-
-  invalidateCashflowCaches();
-  revalidatePath("/");
-  revalidatePath("/transactions");
-  return { success: true };
-}
-
-export async function restoreTransactionAction(id: number | string) {
-  const user = await requireAuth();
-
-  const txId = typeof id === "number" ? id : parseInt(id, 10);
-  await prisma.transaction.updateMany({
-    where: { id: txId, userId: user.id },
-    data: { deletedAt: null },
   });
 
   invalidateCashflowCaches();
@@ -492,7 +485,10 @@ export async function getCashflowTrendData(
   const cached = cacheGet<CashflowChartDataPoint[]>(cacheKey);
   if (cached) return cached;
 
-  const txWhere: any = { deletedAt: null, houseId: { in: targetIds } };
+  const txWhere: Prisma.TransactionWhereInput = {
+    deletedAt: null,
+    houseId: { in: targetIds },
+  };
 
   const now = new Date();
   let endDate = new Date(
@@ -630,19 +626,28 @@ export async function getCashflowTrendData(
 export async function getDashboardSummary(
   selectedHouseId?: string | number,
   timeframe: CashflowTimeframe = "1Y"
-) {
+): Promise<DashboardSummaryResult | null> {
   const user = await getCurrentUser();
   if (!user) return null;
 
   const { targetIds, cacheKeySegment } =
     await resolveTargetHouseIds(selectedHouseId);
   const cacheKey = `dashboard:${user.id}:${cacheKeySegment}:${timeframe}`;
-  const cached = cacheGet<any>(cacheKey);
+  const cached = cacheGet<DashboardSummaryResult>(cacheKey);
   if (cached) return cached;
 
-  const houseWhere: any = { deletedAt: null, id: { in: targetIds } };
-  const txWhere: any = { deletedAt: null, houseId: { in: targetIds } };
-  const loanWhere: any = { deletedAt: null, houseId: { in: targetIds } };
+  const houseWhere: Prisma.HouseWhereInput = {
+    deletedAt: null,
+    id: { in: targetIds },
+  };
+  const txWhere: Prisma.TransactionWhereInput = {
+    deletedAt: null,
+    houseId: { in: targetIds },
+  };
+  const loanWhere: Prisma.LoanWhereInput = {
+    deletedAt: null,
+    houseId: { in: targetIds },
+  };
 
   // Run all independent queries concurrently in parallel with column-level select projection
   const [houses, transactions, loans, recentTransactions] = await Promise.all([
@@ -781,16 +786,7 @@ export async function getDashboardSummary(
 
 export async function syncTransactionsFromExcelAction(
   formData: FormData
-): Promise<{
-  success?: boolean;
-  error?: string;
-  stats?: {
-    added: number;
-    updated: number;
-    skipped: number;
-    total: number;
-  };
-}> {
+): Promise<ActionResponse<SyncStats>> {
   const user = await requireAuth();
 
   const file = formData.get("file");
@@ -803,7 +799,9 @@ export async function syncTransactionsFromExcelAction(
     const buffer = Buffer.from(arrayBuffer);
 
     const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(buffer as any);
+    await workbook.xlsx.load(
+      buffer as unknown as Parameters<typeof workbook.xlsx.load>[0]
+    );
 
     const worksheet = workbook.worksheets[0];
     if (!worksheet) {
@@ -901,7 +899,7 @@ export async function syncTransactionsFromExcelAction(
 
     worksheet.eachRow((row, rowNumber) => {
       if (rowNumber <= headerRowIdx) return;
-      const rowValues = row.values as any[];
+      const rowValues = row.values as unknown[];
       if (!rowValues || rowValues.length === 0) return;
 
       const rawDate = colMap["date"] ? rowValues[colMap["date"]] : null;
@@ -914,11 +912,12 @@ export async function syncTransactionsFromExcelAction(
       const rawType = colMap["type"] ? rowValues[colMap["type"]] : "";
       const rawAmount = colMap["amount"] ? rowValues[colMap["amount"]] : null;
 
-      const extractText = (val: any): string => {
+      const extractText = (val: unknown): string => {
         if (val === null || val === undefined) return "";
         if (typeof val === "object") {
-          if (val.text) return String(val.text).trim();
-          if (val.result) return String(val.result).trim();
+          const rec = val as Record<string, unknown>;
+          if (rec.text) return String(rec.text).trim();
+          if (rec.result) return String(rec.result).trim();
         }
         return String(val).trim();
       };
@@ -992,18 +991,19 @@ export async function syncTransactionsFromExcelAction(
 
     return {
       success: true,
-      stats: {
+      data: {
         added: toInsert.length,
         updated: 0,
         skipped: skippedCount,
         total: totalParsedRows,
       },
     };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error syncing transactions from Excel:", error);
+    const err = error as Error | undefined;
     return {
       error:
-        error?.message ||
+        err?.message ||
         "Failed to process Excel file. Please ensure it is a valid .xlsx file.",
     };
   }

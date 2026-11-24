@@ -1,3 +1,5 @@
+import type { ComponentType } from "react";
+
 export type DatePreset =
   "all" | "today" | "yesterday" | "week" | "month" | "last_month" | "year";
 
@@ -9,7 +11,7 @@ export type SortOrder = "asc" | "desc";
 export interface TransactionTableItem {
   id: number | string;
   type: "INFLOW" | "OUTFLOW";
-  amount: any;
+  amount: number | string;
   title: string;
   desc?: string | null;
   category: string;
@@ -48,7 +50,6 @@ export interface TransactionFilterOptions {
   search?: string;
   sortBy?: string;
   sortOrder?: "asc" | "desc";
-  includeDeleted?: boolean;
   isFlagged?: boolean;
   flaggedOnly?: boolean;
 }
@@ -118,6 +119,6 @@ export interface ExportTransactionItem {
 export interface FilterActiveChip {
   id: string;
   label: string;
-  icon?: any;
+  icon?: ComponentType<{ className?: string }>;
   onRemove: () => void;
 }
