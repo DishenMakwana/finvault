@@ -27,8 +27,8 @@ import {
 export default async function AnalyticsPage({
   searchParams,
 }: AnalyticsPageProps) {
-  const resolvedParams = (await searchParams) || {};
-  const cookieStore = await cookies();
+  const [rawParams, cookieStore] = await Promise.all([searchParams, cookies()]);
+  const resolvedParams = rawParams || {};
   const cookieHouseId = cookieStore.get("finvault_active_house")?.value;
 
   if (resolvedParams.houseId === undefined) {

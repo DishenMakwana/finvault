@@ -10,8 +10,8 @@ import { redirect } from "next/navigation";
 import { LoansPageProps } from "@/types/loans.types";
 
 export default async function LoansPage({ searchParams }: LoansPageProps) {
-  const resolvedParams = (await searchParams) || {};
-  const cookieStore = await cookies();
+  const [rawParams, cookieStore] = await Promise.all([searchParams, cookies()]);
+  const resolvedParams = rawParams || {};
   const cookieHouseId = cookieStore.get("finvault_active_house")?.value;
 
   if (resolvedParams.houseId === undefined) {

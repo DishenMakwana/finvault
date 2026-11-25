@@ -9,8 +9,11 @@ import { redirect } from "next/navigation";
 import { HousesPageProps } from "@/types/houses.types";
 
 export default async function HousesPage({ searchParams }: HousesPageProps) {
-  const resolvedParams = searchParams ? await searchParams : {};
-  const cookieStore = await cookies();
+  const [rawParams, cookieStore] = await Promise.all([
+    searchParams ?? Promise.resolve(undefined),
+    cookies(),
+  ]);
+  const resolvedParams = rawParams || {};
   const cookieHouseId = cookieStore.get("finvault_active_house")?.value;
 
   if (resolvedParams.houseId === undefined) {

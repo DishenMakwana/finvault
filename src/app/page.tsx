@@ -15,8 +15,8 @@ import { DashboardPageProps, CashflowTimeframe } from "@/types/dashboard.types";
 export default async function DashboardPage({
   searchParams,
 }: DashboardPageProps) {
-  const resolvedParams = (await searchParams) || {};
-  const cookieStore = await cookies();
+  const [rawParams, cookieStore] = await Promise.all([searchParams, cookies()]);
+  const resolvedParams = rawParams || {};
   const cookieHouseId = cookieStore.get("finvault_active_house")?.value;
   const currentTimeframe =
     (resolvedParams.timeframe as CashflowTimeframe) || "1Y";

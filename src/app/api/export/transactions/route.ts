@@ -61,22 +61,33 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       }
     }
 
-    const transactions = await prisma.transaction.findMany({
-      where: whereClause,
-      select: {
-        id: true,
-        dateOfAdd: true,
-        title: true,
-        desc: true,
-        category: true,
-        type: true,
-        amount: true,
-        createdAt: true,
-        isFlagged: true,
-        house: { select: { name: true } },
-      },
-      orderBy: { dateOfAdd: "desc" },
-    });
+    const parsedHId =
+      houseIdStr && houseIdStr !== "ALL" ? parseInt(houseIdStr, 10) : NaN;
+
+    const [transactions, house] = await Promise.all([
+      prisma.transaction.findMany({
+        where: whereClause,
+        select: {
+          id: true,
+          dateOfAdd: true,
+          title: true,
+          desc: true,
+          category: true,
+          type: true,
+          amount: true,
+          createdAt: true,
+          isFlagged: true,
+          house: { select: { name: true } },
+        },
+        orderBy: { dateOfAdd: "desc" },
+      }),
+      !isNaN(parsedHId)
+        ? prisma.house.findUnique({
+            where: { id: parsedHId },
+            select: { name: true },
+          })
+        : Promise.resolve(null),
+    ]);
 
     const exportItems: ExportTransactionItem[] = transactions.map((t) => ({
       id: t.id,
@@ -91,17 +102,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
       createdAt: t.createdAt,
     }));
 
-    let houseName = "All Houses";
-    if (houseIdStr && houseIdStr !== "ALL") {
-      const parsedHId = parseInt(houseIdStr, 10);
-      if (!isNaN(parsedHId)) {
-        const house = await prisma.house.findUnique({
-          where: { id: parsedHId },
-          select: { name: true },
-        });
-        if (house) houseName = house.name;
-      }
-    }
+    const houseName = house?.name || "All Houses";
 
     const excelBuffer = await generateTransactionsExcel(exportItems, houseName);
 

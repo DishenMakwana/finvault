@@ -436,19 +436,19 @@ export async function updateTransactionAction(formData: FormData) {
     return { error: "Amount must be a positive number." };
   }
 
-  // Verify house exists
-  const house = await prisma.house.findFirst({
-    where: { id: houseId, deletedAt: null },
-  });
+  // Verify house & transaction existence concurrently
+  const [house, existing] = await Promise.all([
+    prisma.house.findFirst({
+      where: { id: houseId, deletedAt: null },
+    }),
+    prisma.transaction.findFirst({
+      where: { id },
+    }),
+  ]);
 
   if (!house) {
     return { error: "Selected house does not exist." };
   }
-
-  // Check if transaction exists
-  const existing = await prisma.transaction.findFirst({
-    where: { id },
-  });
 
   if (!existing) {
     return { error: "Transaction not found." };
@@ -500,7 +500,7 @@ export async function getCashflowTrendData(
     59,
     999
   );
-  let startDate: Date;
+  let startDate: Date = new Date(now.getFullYear(), now.getMonth() - 11, 1);
 
   if (timeframe === "1Y") {
     startDate = new Date(now.getFullYear(), now.getMonth() - 11, 1);
@@ -508,40 +508,53 @@ export async function getCashflowTrendData(
     startDate = new Date(now.getFullYear(), now.getMonth() - 23, 1);
   } else if (timeframe === "3Y") {
     startDate = new Date(now.getFullYear(), now.getMonth() - 35, 1);
-  } else {
-    // ALL: Find earliest transaction in the selected scope
-    const earliestTx = await prisma.transaction.findFirst({
+  }
+
+  // Fetch min/max dates in a single aggregate when ALL, otherwise only latestTx
+  if (timeframe === "ALL") {
+    const dateBounds = await prisma.transaction.aggregate({
       where: txWhere,
-      orderBy: { dateOfAdd: "asc" },
-      select: { dateOfAdd: true },
+      _min: { dateOfAdd: true },
+      _max: { dateOfAdd: true },
     });
-    if (earliestTx?.dateOfAdd) {
+    if (dateBounds._min.dateOfAdd) {
       startDate = new Date(
-        earliestTx.dateOfAdd.getFullYear(),
-        earliestTx.dateOfAdd.getMonth(),
+        dateBounds._min.dateOfAdd.getFullYear(),
+        dateBounds._min.dateOfAdd.getMonth(),
         1
       );
     } else {
       startDate = new Date(now.getFullYear(), now.getMonth() - 11, 1);
     }
-  }
-
-  // Extend end date if there are future-dated transactions
-  const latestTx = await prisma.transaction.findFirst({
-    where: txWhere,
-    orderBy: { dateOfAdd: "desc" },
-    select: { dateOfAdd: true },
-  });
-  if (latestTx?.dateOfAdd && latestTx.dateOfAdd > endDate) {
-    endDate = new Date(
-      latestTx.dateOfAdd.getFullYear(),
-      latestTx.dateOfAdd.getMonth() + 1,
-      0,
-      23,
-      59,
-      59,
-      999
-    );
+    if (dateBounds._max.dateOfAdd && dateBounds._max.dateOfAdd > endDate) {
+      endDate = new Date(
+        dateBounds._max.dateOfAdd.getFullYear(),
+        dateBounds._max.dateOfAdd.getMonth() + 1,
+        0,
+        23,
+        59,
+        59,
+        999
+      );
+    }
+  } else {
+    // Extend end date if there are future-dated transactions
+    const latestTx = await prisma.transaction.findFirst({
+      where: txWhere,
+      orderBy: { dateOfAdd: "desc" },
+      select: { dateOfAdd: true },
+    });
+    if (latestTx?.dateOfAdd && latestTx.dateOfAdd > endDate) {
+      endDate = new Date(
+        latestTx.dateOfAdd.getFullYear(),
+        latestTx.dateOfAdd.getMonth() + 1,
+        0,
+        23,
+        59,
+        59,
+        999
+      );
+    }
   }
 
   const totalMonths =
@@ -846,11 +859,25 @@ export async function syncTransactionsFromExcelAction(
       };
     }
 
-    // 2. Fetch User's Houses & Existing Transactions for Deduplication
-    const userHouses = await prisma.house.findMany({
-      where: { userId: user.id, deletedAt: null },
-      select: { id: true, name: true },
-    });
+    // 2. Fetch User's Houses & Existing Transactions concurrently for Deduplication
+    const [userHouses, existingTxs] = await Promise.all([
+      prisma.house.findMany({
+        where: { userId: user.id, deletedAt: null },
+        select: { id: true, name: true },
+      }),
+      prisma.transaction.findMany({
+        where: { userId: user.id, deletedAt: null },
+        select: {
+          dateOfAdd: true,
+          title: true,
+          category: true,
+          type: true,
+          amount: true,
+          houseId: true,
+        },
+      }),
+    ]);
+
     const defaultHouseId = userHouses[0]?.id;
     if (!defaultHouseId) {
       return {
@@ -858,18 +885,6 @@ export async function syncTransactionsFromExcelAction(
           "No active house found in your account. Please create a house first.",
       };
     }
-
-    const existingTxs = await prisma.transaction.findMany({
-      where: { userId: user.id, deletedAt: null },
-      select: {
-        dateOfAdd: true,
-        title: true,
-        category: true,
-        type: true,
-        amount: true,
-        houseId: true,
-      },
-    });
 
     // 3. Build deduplication set: Date (YYYY-MM-DD) + Title + Category + Type + Amount + House / Property
     const seenSignatures = new Set<string>();

@@ -16,8 +16,8 @@ import { TransactionsPageProps } from "@/types/transactions.types";
 export default async function TransactionsPage({
   searchParams,
 }: TransactionsPageProps) {
-  const resolvedParams = (await searchParams) || {};
-  const cookieStore = await cookies();
+  const [rawParams, cookieStore] = await Promise.all([searchParams, cookies()]);
+  const resolvedParams = rawParams || {};
   const cookieHouseId = cookieStore.get("finvault_active_house")?.value;
 
   if (resolvedParams.houseId === undefined) {

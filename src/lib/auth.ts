@@ -170,11 +170,35 @@ export const getCurrentUser = cache(async () => {
       return null;
     }
 
-    // Verify session in DB and check expiration
+    const cacheKey = `auth:user:${decoded.userId}:${decoded.sessionId || "none"}`;
+    const cachedUser = cacheGet<{
+      id: number;
+      email: string;
+      name: string | null;
+      createdAt: Date;
+    }>(cacheKey);
+    if (cachedUser) return cachedUser;
+
+    // Parallel session verification & user profile fetch
+    const [activeSession, user] = await Promise.all([
+      decoded.sessionId
+        ? prisma.session.findUnique({
+            where: { id: decoded.sessionId },
+            select: { id: true, expiresAt: true },
+          })
+        : Promise.resolve(null),
+      prisma.user.findUnique({
+        where: { id: decoded.userId },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          createdAt: true,
+        },
+      }),
+    ]);
+
     if (decoded.sessionId) {
-      const activeSession = await prisma.session.findUnique({
-        where: { id: decoded.sessionId },
-      });
       if (!activeSession || new Date(activeSession.expiresAt) < new Date()) {
         if (activeSession) {
           await prisma.session
@@ -186,20 +210,15 @@ export const getCurrentUser = cache(async () => {
       }
     }
 
-    const user = await prisma.user.findUnique({
-      where: { id: decoded.userId },
-      select: {
-        id: true,
-        email: true,
-        name: true,
-        createdAt: true,
-      },
-    });
-
     if (!user) {
       cookieStore.delete(COOKIE_NAME);
       return null;
     }
+
+    const sessionRemainingMs = activeSession
+      ? Math.max(1000, new Date(activeSession.expiresAt).getTime() - Date.now())
+      : 30000;
+    cacheSet(cacheKey, user, Math.min(30000, sessionRemainingMs), ["sessions"]);
 
     return user;
   } catch {
@@ -269,23 +288,24 @@ export async function getActiveSessions(userId: number): Promise<Session[]> {
   const cached = cacheGet<Session[]>(cacheKey);
   if (cached) return cached;
 
-  // Opportunistic cleanup of expired sessions for this user
-  await prisma.session
-    .deleteMany({
+  // Parallel expired-session cleanup and active-session fetch
+  const [, sessions] = await Promise.all([
+    prisma.session
+      .deleteMany({
+        where: {
+          userId,
+          expiresAt: { lte: new Date() },
+        },
+      })
+      .catch(() => {}),
+    prisma.session.findMany({
       where: {
         userId,
-        expiresAt: { lte: new Date() },
+        expiresAt: { gt: new Date() },
       },
-    })
-    .catch(() => {});
-
-  const sessions = await prisma.session.findMany({
-    where: {
-      userId,
-      expiresAt: { gt: new Date() },
-    },
-    orderBy: { createdAt: "desc" },
-  });
+      orderBy: { createdAt: "desc" },
+    }),
+  ]);
 
   cacheSet(cacheKey, sessions, 30000, ["sessions"]);
   return sessions;
